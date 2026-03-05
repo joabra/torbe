@@ -5,16 +5,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
+export const maxDuration = 60; // sekunder – tillåt längre körtid för batch-anrop
+
 interface FlightDeal {
   date: string;
   price: number;
   currency: string;
   deepLink: string;
+  direction: "outbound" | "return";
 }
 
 /* ── Amadeus OAuth2 token (cachad i minnet) ─────────────────────── */
 
 let tokenCache: { token: string; expires: number } | null = null;
+
+/* ── Flygpris-cache per månad (1 timme TTL) ─────────────────────── */
+
+const flightCache = new Map<string, { data: FlightDeal[]; expires: number }>();
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 timme
 
 async function getAmadeusToken(
   clientId: string,
@@ -38,7 +46,8 @@ async function getAmadeusToken(
   });
 
   if (!res.ok) {
-    throw new Error("Kunde inte hämta Amadeus-token");
+    const body = await res.text().catch(() => "");
+    throw new Error(`Amadeus token-fel ${res.status}: ${body}`);
   }
 
   const data = await res.json();
@@ -58,7 +67,7 @@ async function searchFlightsForDate(
   destination: string,
   date: string,
   currency: string,
-): Promise<{ price: number; currency: string; origin: string; date: string } | null> {
+): Promise<{ price: number; currency: string; origin: string; destination: string; date: string } | null> {
   const baseUrl =
     process.env.AMADEUS_BASE_URL ?? "https://api.amadeus.com";
 
@@ -90,6 +99,7 @@ async function searchFlightsForDate(
       price: parseFloat(data.data[0].price.total),
       currency: data.data[0].price.currency,
       origin,
+      destination,
       date,
     };
   } catch {
@@ -134,12 +144,21 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Returnera cachad data om den finns och är färsk
+  const cacheKey = `${year}-${month}`;
+  const cached = flightCache.get(cacheKey);
+  if (cached && Date.now() < cached.expires) {
+    return NextResponse.json(cached.data);
+  }
+
   let token: string;
   try {
     token = await getAmadeusToken(apiKey, apiSecret);
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Amadeus auth error:", msg);
     return NextResponse.json(
-      { error: "Kunde inte autentisera mot Amadeus" },
+      { error: `Kunde inte autentisera mot Amadeus: ${msg}` },
       { status: 502 },
     );
   }
@@ -149,18 +168,19 @@ export async function GET(req: NextRequest) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const origins = ["GOT", "VXO"];
-  const destination = "ALC";
+  const sweAirports = ["GOT", "VXO"];
+  const ALC = "ALC";
   const currency = "SEK";
 
-  // Bygg lista med sökningar: origin × datum (bara framtida datum)
-  const searches: { date: string; origin: string }[] = [];
+  // Bygg lista med sökningar: båda riktningar × datum (bara framtida datum)
+  const searches: { date: string; origin: string; destination: string }[] = [];
   for (let d = 1; d <= daysInMonth; d++) {
     const dateObj = new Date(year, month - 1, d);
     if (dateObj >= today) {
       const dateStr = `${year}-${pad(month)}-${pad(d)}`;
-      for (const origin of origins) {
-        searches.push({ date: dateStr, origin });
+      for (const sweAirport of sweAirports) {
+        searches.push({ date: dateStr, origin: sweAirport, destination: ALC }); // utresa
+        searches.push({ date: dateStr, origin: ALC, destination: sweAirport }); // hemresa
       }
     }
   }
@@ -172,26 +192,38 @@ export async function GET(req: NextRequest) {
     const batch = searches.slice(i, i + BATCH_SIZE);
     const batchResults = await Promise.all(
       batch.map((s) =>
-        searchFlightsForDate(token, s.origin, destination, s.date, currency),
+        searchFlightsForDate(token, s.origin, s.destination, s.date, currency),
       ),
     );
     results.push(...batchResults);
   }
 
-  // Behåll billigaste flyget per dag
-  const cheapestPerDay = new Map<string, FlightDeal>();
+  // Behåll billigaste flyget per dag och riktning
+  const cheapestOutbound = new Map<string, FlightDeal>();
+  const cheapestReturn = new Map<string, FlightDeal>();
   for (const r of results) {
     if (!r) continue;
-    const existing = cheapestPerDay.get(r.date);
+    const isReturn = r.origin === ALC;
+    const map = isReturn ? cheapestReturn : cheapestOutbound;
+    const existing = map.get(r.date);
     if (!existing || r.price < existing.price) {
-      cheapestPerDay.set(r.date, {
+      map.set(r.date, {
         date: r.date,
         price: Math.round(r.price),
         currency: r.currency,
-        deepLink: buildSearchLink(r.origin, destination, r.date),
+        deepLink: buildSearchLink(r.origin, r.destination, r.date),
+        direction: isReturn ? "return" : "outbound",
       });
     }
   }
 
-  return NextResponse.json(Array.from(cheapestPerDay.values()));
+  const deals = [
+    ...Array.from(cheapestOutbound.values()),
+    ...Array.from(cheapestReturn.values()),
+  ];
+
+  // Spara i cache i 1 timme
+  flightCache.set(cacheKey, { data: deals, expires: Date.now() + CACHE_TTL_MS });
+
+  return NextResponse.json(deals);
 }

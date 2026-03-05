@@ -17,6 +17,7 @@ interface FlightDeal {
   price: number;
   currency: string;
   deepLink: string;
+  direction: "outbound" | "return";
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -36,10 +37,14 @@ function getBookingForDate(date: Date, bookings: Booking[]): Booking | undefined
   });
 }
 
-function getFlightForDate(date: Date, flights: FlightDeal[]): FlightDeal | undefined {
+function getFlightsForDate(date: Date, flights: FlightDeal[]): { outbound?: FlightDeal; ret?: FlightDeal } {
   const pad = (n: number) => String(n).padStart(2, "0");
   const key = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-  return flights.find((f) => f.date === key);
+  const dayFlights = flights.filter((f) => f.date === key);
+  return {
+    outbound: dayFlights.find((f) => f.direction === "outbound"),
+    ret: dayFlights.find((f) => f.direction === "return"),
+  };
 }
 
 function firstNameOf(booking: Booking): string {
@@ -130,7 +135,7 @@ export function BookingCalendar() {
           const booked = !!booking;
           const isToday = isSameDay(date, today);
           const firstName = booked ? firstNameOf(booking!) : "";
-          const flight = session ? getFlightForDate(date, flights) : undefined;
+          const { outbound: flightOut, ret: flightRet } = session ? getFlightsForDate(date, flights) : {};
 
           return (
             <div
@@ -147,15 +152,28 @@ export function BookingCalendar() {
               {booked && firstName && (
                 <span className="text-[8px] leading-none mt-0.5 font-normal truncate max-w-full px-0.5">{firstName}</span>
               )}
-              {flight && (
+              {flightOut && (
                 <a
-                  href={flight.deepLink}
+                  href={flightOut.deepLink}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-0.5 bg-green-100 text-green-700 text-[8px] font-semibold px-1 rounded-full leading-none hover:bg-green-200 transition-colors"
                   onClick={(e) => e.stopPropagation()}
+                  title={`Utresa till Alicante: ${flightOut.price} kr`}
                 >
-                  {flight.price} kr
+                  ↗ {flightOut.price}
+                </a>
+              )}
+              {flightRet && (
+                <a
+                  href={flightRet.deepLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-0.5 bg-sky-100 text-sky-700 text-[8px] font-semibold px-1 rounded-full leading-none hover:bg-sky-200 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Hemresa från Alicante: ${flightRet.price} kr`}
+                >
+                  ↙ {flightRet.price}
                 </a>
               )}
             </div>
@@ -178,10 +196,16 @@ export function BookingCalendar() {
           <span className="text-xs text-stone-500">Ledig</span>
         </div>
         {session && (
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-100 border border-green-300" />
-            <span className="text-xs text-stone-500">Billigt flyg</span>
-          </div>
+          <>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-100 border border-green-300" />
+              <span className="text-xs text-stone-500">↗ Utresa till ALC</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-sky-100 border border-sky-300" />
+              <span className="text-xs text-stone-500">↙ Hemresa från ALC</span>
+            </div>
+          </>
         )}
       </div>
     </div>
