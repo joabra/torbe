@@ -20,8 +20,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  const role = (session?.user as { role?: string })?.role;
-  if (!session?.user || role !== "ADMIN") {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Åtkomst nekad" }, { status: 403 });
   }
 
@@ -29,6 +28,8 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Ogiltiga uppgifter" }, { status: 400 });
 
-  const tip = await prisma.tip.create({ data: parsed.data });
+  const tip = await prisma.tip.create({
+    data: { ...parsed.data, createdById: session.user.id },
+  });
   return NextResponse.json(tip, { status: 201 });
 }

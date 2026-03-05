@@ -1,8 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import { MapPin, Globe, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { MapPin, Globe, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal, Plus, Pencil, Trash2, X } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { categoryLabel } from "@/lib/utils";
 
 interface Tip {
@@ -14,17 +17,13 @@ interface Tip {
   website?: string;
   imageUrl?: string;
   mapUrl?: string;
+  createdById?: string;
 }
 
-const categories = ["ALL", "RESTAURANT", "EXCURSION", "MARKET", "EVENT", "OTHER"];
+const CATEGORIES = ["RESTAURANT", "EXCURSION", "MARKET", "EVENT", "OTHER"] as const;
+type TipCategory = typeof CATEGORIES[number];
 
-const categoryIcons: Record<string, React.ReactNode> = {
-  RESTAURANT: <UtensilsCrossed className="w-5 h-5" />,
-  EXCURSION: <Map className="w-5 h-5" />,
-  MARKET: <ShoppingBag className="w-5 h-5" />,
-  EVENT: <PartyPopper className="w-5 h-5" />,
-  OTHER: <MoreHorizontal className="w-5 h-5" />,
-};
+const categories = ["ALL", ...CATEGORIES];
 
 const categoryEmoji: Record<string, string> = {
   RESTAURANT: "🍽️",
@@ -34,46 +33,182 @@ const categoryEmoji: Record<string, string> = {
   OTHER: "📍",
 };
 
+const emptyForm = { category: "RESTAURANT" as TipCategory, title: "", description: "", address: "", website: "", imageUrl: "", mapUrl: "" };
+
+function TipModal({
+  tip,
+  onClose,
+  onSaved,
+}: {
+  tip?: Tip;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    category: (tip?.category ?? "RESTAURANT") as TipCategory,
+    title: tip?.title ?? "",
+    description: tip?.description ?? "",
+    address: tip?.address ?? "",
+    website: tip?.website ?? "",
+    imageUrl: tip?.imageUrl ?? "",
+    mapUrl: tip?.mapUrl ?? "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const isEdit = Boolean(tip?.id && !tip.id.startsWith("s"));
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const payload = Object.fromEntries(Object.entries(form).filter(([, v]) => v !== ""));
+
+    const res = await fetch(isEdit ? `/api/tips/${tip!.id}` : "/api/tips", {
+      method: isEdit ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    setLoading(false);
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error ?? "Något gick fel");
+    } else {
+      onSaved();
+      onClose();
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-xl font-bold text-forest-900">{isEdit ? "Redigera tips" : "Lägg till tips"}</h2>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600"><X className="w-5 h-5" /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {/* Kategori */}
+          <div>
+            <label className="text-sm font-semibold text-stone-700 block mb-1.5">Kategori</label>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((cat) => (
+                <button key={cat} type="button"
+                  onClick={() => setForm((f) => ({ ...f, category: cat }))}
+                  className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${form.category === cat ? "bg-forest-800 text-white" : "bg-stone-100 text-stone-600 hover:bg-forest-50"}`}>
+                  {categoryEmoji[cat]} {categoryLabel(cat)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Input id="title" label="Rubrik *" required value={form.title}
+            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="T.ex. Fantastisk strandrestaurang" />
+          <div>
+            <label htmlFor="description" className="text-sm font-semibold text-stone-700 block mb-1.5">Beskrivning *</label>
+            <textarea id="description" required rows={3}
+              className="w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-forest-400 resize-none"
+              value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Berätta varför detta är värt ett besök..." />
+          </div>
+          <Input id="address" label="Adress" value={form.address}
+            onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="Gata, Stad" />
+          <Input id="website" label="Webbplats (URL)" type="url" value={form.website}
+            onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} placeholder="https://example.com" />
+          <Input id="imageUrl" label="Bild-URL" type="url" value={form.imageUrl}
+            onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))} placeholder="https://..." />
+          <Input id="mapUrl" label="Google Maps-länk" type="url" value={form.mapUrl}
+            onChange={(e) => setForm((f) => ({ ...f, mapUrl: e.target.value }))} placeholder="https://maps.google.com/..." />
+
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+
+          <div className="flex gap-3 pt-1">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Avbryt</Button>
+            <Button type="submit" variant="sand" disabled={loading} className="flex-1">
+              {loading ? "Sparar..." : isEdit ? "Spara ändringar" : "Lägg till tips"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function AktiviteterPage() {
+  const { data: session } = useSession();
+  const userId = (session?.user as { id?: string })?.id;
+  const role = (session?.user as { role?: string })?.role;
+  const isLoggedIn = Boolean(session?.user);
+
   const [tips, setTips] = useState<Tip[]>([]);
   const [filter, setFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editTip, setEditTip] = useState<Tip | undefined>();
 
-  useEffect(() => {
+  function loadTips() {
+    setLoading(true);
     fetch("/api/tips")
       .then((r) => r.json())
       .then(setTips)
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { loadTips(); }, []);
+
+  async function handleDelete(tip: Tip) {
+    if (!confirm(`Ta bort tipset "${tip.title}"?`)) return;
+    await fetch(`/api/tips/${tip.id}`, { method: "DELETE" });
+    loadTips();
+  }
+
+  function canEdit(tip: Tip) {
+    if (!isLoggedIn) return false;
+    return role === "ADMIN" || tip.createdById === userId;
+  }
 
   const filtered = filter === "ALL" ? tips : tips.filter((t) => t.category === filter);
 
   const sampleTips: Tip[] = [
-    { id: "s1", category: "RESTAURANT", title: "El Varadero – Torre de la Horadada", description: "Topprestaurang i den charmiga fiskehamnen Torre de la Horadada, 2 km norrut. Perfekt friterad fisk och arroz caldoso.", address: "Puerto de Torre de la Horadada", imageUrl: "/tips/restaurant.jpg", mapUrl: "https://maps.google.com/?q=Torre+de+la+Horadada+puerto" },
+    { id: "s1", category: "RESTAURANT", title: "El Varadero – Torre de la Horadada", description: "Topprestaurang i den charmiga fiskehamnen Torre de la Horadada, 2 km norrut. Perfekt friterad fisk och arroz caldoso.", address: "Puerto de Torre de la Horadada", imageUrl: "/tips/restaurant.jpg" },
     { id: "s2", category: "RESTAURANT", title: "Chiringuitos på Playa Mil Palmeras", description: "Strandbarerna längs vår strand serverar bocadillos, grillad fisk och kalla drycker. Perfekt lunch med fötterna i sanden.", address: "Playa de Mil Palmeras", imageUrl: "/tips/beach.jpg" },
-    { id: "s3", category: "EXCURSION", title: "Lo Pagán – Gyttjebad & flamingos", description: "Bara 8 km söderut kan du bada i terapeutisk saltgyttja vid Mar Menors strand. Flamingor samlas i angränsande saltdammar. Gratis!", address: "Playa de Lo Pagán, San Pedro del Pinatar", imageUrl: "/tips/saltlake.jpg" },
-    { id: "s4", category: "EXCURSION", title: "Torrevieja – Rosa saltsjöar", description: "15 km norrut ligger Europas mest spektakulära rosa saltsjöar med flamingor och naturpark. Glöm inte havspromenaden!", address: "Torrevieja, Alicante", imageUrl: "/tips/saltlake.jpg", website: "https://www.torrevieja.es" },
-    { id: "s5", category: "EXCURSION", title: "Alicante – Slottet Santa Bárbara", description: "66 km norrut. Klättra upp till renässansslottet med panoramautsikt och promenera i gamla stan El Barrio.", address: "Castillo de Santa Bárbara, Alicante", imageUrl: "/tips/castle.jpg" },
-    { id: "s6", category: "MARKET", title: "Torreviejas fredagsmarknad", description: "En av Costa Blancas största utomhusmarknader varje fredag 09–14. Kläder, lokala delikatesser, kryddor och hantverk.", address: "Torrevieja", imageUrl: "/tips/market.jpg" },
-    { id: "s7", category: "MARKET", title: "La Zenia Boulevard", description: "Stort utomhusshopping-center 10 km norrut. Zara, H&M, restauranger och bio under spansk sol. Öppet till 22:00.", address: "Orihuela Costa", imageUrl: "/tips/shopping.jpg", website: "https://www.lazeniaboulevardonline.com" },
-    { id: "s8", category: "EVENT", title: "Midsommarfirande – San Juan", description: "Natten till 24 juni tänds jättebål på alla stränder. Spanjorerna hoppar över elden, äter druvor i midnatt. Magiskt!", address: "Playa de Mil Palmeras & Torre de la Horadada", imageUrl: "/tips/beach.jpg" },
-    { id: "s9", category: "OTHER", title: "Torre de la Horadada – Vakttorn (1591)", description: "Det medeltida vakttornet i angränsande byn byggdes 1591 mot pirater. Promenera längs charming hamnpromenad.", address: "Torre de la Horadada", imageUrl: "/tips/castle.jpg" },
-    { id: "s10", category: "OTHER", title: "Romersk stentäkt – Playa Mil Palmeras", description: "På norra delen av vår strand finns rester av en romersk stentäkt från antiken — historia alldeles intill sanden!", address: "Playa de Mil Palmeras (norra delen)", imageUrl: "/tips/beach.jpg" },
+    { id: "s3", category: "EXCURSION", title: "Lo Pagán – Gyttjebad & flamingos", description: "Bara 8 km söderut kan du bada i terapeutisk saltgyttja vid Mar Menors strand. Flamingor och naturpark. Gratis!", address: "Lo Pagán, San Pedro del Pinatar", imageUrl: "/tips/saltlake.jpg" },
+    { id: "s4", category: "EXCURSION", title: "Torrevieja – Rosa saltsjöar", description: "15 km norrut. Europas vackraste rosa saltsjöar med flamingor och naturpark. Glöm inte havspromenaden!", address: "Torrevieja, Alicante", imageUrl: "/tips/saltlake.jpg" },
+    { id: "s5", category: "EXCURSION", title: "Alicante – Slottet Santa Bárbara", description: "66 km norrut. Renässansslott med panoramautsikt och gamla stan El Barrio.", address: "Castillo de Santa Bárbara, Alicante", imageUrl: "/tips/castle.jpg" },
+    { id: "s6", category: "MARKET", title: "Torreviejas fredagsmarknad", description: "En av Costa Blancas största marknader varje fredag 09–14. Kläder, delikatesser och hantverk.", address: "Torrevieja", imageUrl: "/tips/market.jpg" },
+    { id: "s7", category: "MARKET", title: "La Zenia Boulevard", description: "Stort utomhusshopping 10 km norrut. Zara, H&M, restauranger och bio. Öppet till 22:00.", address: "Orihuela Costa", imageUrl: "/tips/shopping.jpg" },
+    { id: "s8", category: "EVENT", title: "Midsommarfirande – San Juan", description: "Natten till 24 juni tänds jättebål längs hela kusten. Eldverk och folk som hoppar över elden. Magiskt!", address: "Playa de Mil Palmeras", imageUrl: "/tips/beach.jpg" },
+    { id: "s9", category: "OTHER", title: "Torre de la Horadada – Vakttorn (1591)", description: "Medeltida vakttorn byggt mot pirater. Charmig hamnpromenad med glass och utsikt.", address: "Torre de la Horadada", imageUrl: "/tips/castle.jpg" },
+    { id: "s10", category: "OTHER", title: "Romersk stentäkt – Playa Mil Palmeras", description: "Rester av en romersk stentäkt från antiken — historia alldeles intill sanden!", address: "Playa de Mil Palmeras (norra delen)", imageUrl: "/tips/beach.jpg" },
   ];
 
   const displayTips = tips.length > 0 ? filtered : sampleTips.filter((t) => filter === "ALL" || t.category === filter);
 
   return (
     <div className="pt-28 pb-20 min-h-screen bg-stone-50 px-6">
+      {(showModal || editTip) && (
+        <TipModal
+          tip={editTip}
+          onClose={() => { setShowModal(false); setEditTip(undefined); }}
+          onSaved={loadTips}
+        />
+      )}
+
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
           <span className="text-sand-500 text-sm font-semibold uppercase tracking-widest">Utforska</span>
           <h1 className="mt-3 text-4xl font-bold text-forest-900">Aktiviteter & Tips</h1>
           <p className="mt-3 text-stone-500 max-w-xl mx-auto">
-            Det bästa av Costa Blanca — restauranger, utflykter, marknader och event nära
-            lägenheten i Mil Palmeras.
+            Det bästa av Costa Blanca — restauranger, utflykter, marknader och event nära lägenheten i Mil Palmeras.
           </p>
+          {isLoggedIn && (
+            <Button variant="sand" onClick={() => { setEditTip(undefined); setShowModal(true); }} className="mt-5 inline-flex items-center gap-2">
+              <Plus className="w-4 h-4" /> Lägg till tips
+            </Button>
+          )}
         </div>
 
         {/* Category filter */}
@@ -103,14 +238,38 @@ export default function AktiviteterPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {displayTips.map((tip) => (
               <Card key={tip.id} className="hover:shadow-md hover:-translate-y-0.5 transition-all">
-                {/* Card top with image or emoji fallback */}
+                {/* Card top */}
                 {tip.imageUrl ? (
-                  <div className="h-36 overflow-hidden">
+                  <div className="h-36 overflow-hidden relative">
                     <img src={tip.imageUrl} alt={tip.title} className="w-full h-full object-cover" />
+                    {canEdit(tip) && (
+                      <div className="absolute top-2 right-2 flex gap-1">
+                        <button onClick={() => setEditTip(tip)}
+                          className="bg-white/90 backdrop-blur rounded-lg p-1.5 text-forest-700 hover:bg-white shadow-sm">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDelete(tip)}
+                          className="bg-white/90 backdrop-blur rounded-lg p-1.5 text-red-600 hover:bg-white shadow-sm">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="h-36 bg-gradient-to-br from-forest-50 to-sand-100 flex items-center justify-center text-6xl">
+                  <div className="h-36 bg-gradient-to-br from-forest-50 to-sand-100 flex items-center justify-center text-6xl relative">
                     {categoryEmoji[tip.category]}
+                    {canEdit(tip) && (
+                      <div className="absolute top-2 right-2 flex gap-1">
+                        <button onClick={() => setEditTip(tip)}
+                          className="bg-white/90 backdrop-blur rounded-lg p-1.5 text-forest-700 hover:bg-white shadow-sm">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDelete(tip)}
+                          className="bg-white/90 backdrop-blur rounded-lg p-1.5 text-red-600 hover:bg-white shadow-sm">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
                 <CardBody>
@@ -118,9 +277,7 @@ export default function AktiviteterPage() {
                     <h3 className="font-bold text-forest-800 text-base leading-tight">{tip.title}</h3>
                     <Badge variant="category" className="shrink-0">{categoryLabel(tip.category)}</Badge>
                   </div>
-                  <p className="text-stone-500 text-sm leading-relaxed line-clamp-3 mb-3">
-                    {tip.description}
-                  </p>
+                  <p className="text-stone-500 text-sm leading-relaxed line-clamp-3 mb-3">{tip.description}</p>
                   <div className="flex flex-col gap-1.5">
                     {tip.address && (
                       <div className="flex items-center gap-1.5 text-xs text-stone-400">
@@ -128,13 +285,16 @@ export default function AktiviteterPage() {
                         {tip.address}
                       </div>
                     )}
+                    {tip.mapUrl && (
+                      <a href={tip.mapUrl} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-xs text-forest-600 hover:text-forest-800 transition-colors">
+                        <Map className="w-3.5 h-3.5 shrink-0" />
+                        Visa på karta
+                      </a>
+                    )}
                     {tip.website && (
-                      <a
-                        href={tip.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-xs text-forest-600 hover:text-forest-800 transition-colors"
-                      >
+                      <a href={tip.website} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-xs text-forest-600 hover:text-forest-800 transition-colors">
                         <Globe className="w-3.5 h-3.5 shrink-0" />
                         Besök webbplats
                       </a>
@@ -149,16 +309,21 @@ export default function AktiviteterPage() {
         {displayTips.length === 0 && !loading && (
           <div className="text-center py-20">
             <p className="text-stone-400 text-lg">Inga tips i denna kategori ännu.</p>
-            <p className="text-stone-300 text-sm mt-1">Admin kan lägga till tips via admin-panelen.</p>
+            {isLoggedIn && (
+              <button onClick={() => setShowModal(true)} className="mt-3 text-sm text-forest-600 hover:underline">
+                + Lägg till det första tipset
+              </button>
+            )}
           </div>
         )}
 
         {tips.length === 0 && !loading && (
           <p className="text-center text-xs text-sand-500 mt-8">
-            ✨ Exempeltips visas — riktiga tips läggs till av admin
+            ✨ Exempeltips visas — logga in för att lägga till riktiga tips
           </p>
         )}
       </div>
     </div>
   );
 }
+

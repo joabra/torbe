@@ -13,19 +13,23 @@ const schema = z.object({
   mapUrl: z.string().url().optional().or(z.literal("")),
 });
 
-async function requireAdmin() {
+async function canModify(tipId: string) {
   const session = await auth();
-  const role = (session?.user as { role?: string })?.role;
-  return session?.user && role === "ADMIN";
+  if (!session?.user?.id) return false;
+  const tip = await prisma.tip.findUnique({ where: { id: tipId } });
+  if (!tip) return false;
+  const role = (session.user as { role?: string }).role;
+  // Admin kan ändra alla tips; vanliga användare bara sina egna
+  return role === "ADMIN" || tip.createdById === session.user.id;
 }
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: "Åtkomst nekad" }, { status: 403 });
-
   const { id } = await params;
+  if (!(await canModify(id))) return NextResponse.json({ error: "Åtkomst nekad" }, { status: 403 });
+
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Ogiltiga uppgifter" }, { status: 400 });
@@ -38,9 +42,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: "Åtkomst nekad" }, { status: 403 });
-
   const { id } = await params;
+  if (!(await canModify(id))) return NextResponse.json({ error: "Åtkomst nekad" }, { status: 403 });
+
   await prisma.tip.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
