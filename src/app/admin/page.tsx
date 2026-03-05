@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Check, X, Trash2, Users, CalendarDays, MessageSquare, Plus, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal, UserCheck, UserX } from "lucide-react";
+import { Check, X, Trash2, Users, CalendarDays, MessageSquare, Plus, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal, UserCheck, UserX, KeyRound, Shield } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -34,6 +34,7 @@ interface AppUser {
   id: string;
   name: string;
   email: string;
+  role: string;
   approved: boolean;
   mfaEnabled: boolean;
   createdAt: string;
@@ -67,6 +68,15 @@ export default function AdminPage() {
     category: "RESTAURANT", title: "", description: "", address: "", website: "",
   });
   const [tipLoading, setTipLoading] = useState(false);
+
+  // User management
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "USER" });
+  const [userFormLoading, setUserFormLoading] = useState(false);
+  const [userFormError, setUserFormError] = useState("");
+  const [changePwId, setChangePwId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated" || (status === "authenticated" && role !== "ADMIN")) {
@@ -130,7 +140,7 @@ export default function AdminPage() {
   }
 
   async function handleUserAction(id: string, action: "approve" | "reject") {
-    const confirmMsg = action === "reject" ? "Avslå och ta bort detta konto?" : "Godkänn detta konto?";
+    const confirmMsg = action === "reject" ? "Ta bort detta konto permanent?" : "Godkänn detta konto?";
     if (!confirm(confirmMsg)) return;
     const res = await fetch(`/api/admin/users/${id}`, {
       method: "PATCH",
@@ -144,6 +154,55 @@ export default function AdminPage() {
         setAppUsers((prev) => prev.filter((u) => u.id !== id));
       }
     }
+  }
+
+  async function handleDeleteUser(id: string) {
+    if (!confirm("Ta bort användaren permanent? Alla bokningar och tips raderas med.")) return;
+    const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setAppUsers((prev) => prev.filter((u) => u.id !== id));
+    } else {
+      const data = await res.json();
+      alert(data.error);
+    }
+  }
+
+  async function handleAddUser(e: React.FormEvent) {
+    e.preventDefault();
+    setUserFormLoading(true);
+    setUserFormError("");
+    const res = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(userForm),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setAppUsers((prev) => [data, ...prev]);
+      setUserForm({ name: "", email: "", password: "", role: "USER" });
+      setShowUserForm(false);
+    } else {
+      setUserFormError(data.error ?? "Något gick fel");
+    }
+    setUserFormLoading(false);
+  }
+
+  async function handleChangePassword(id: string) {
+    if (newPassword.length < 6) return;
+    setPwLoading(true);
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "change-password", password: newPassword }),
+    });
+    if (res.ok) {
+      setChangePwId(null);
+      setNewPassword("");
+    } else {
+      const data = await res.json();
+      alert(data.error);
+    }
+    setPwLoading(false);
   }
 
   if (status === "loading" || loading) {
@@ -339,55 +398,125 @@ export default function AdminPage() {
 
         {/* Users tab */}
         {tab === "users" && (
-          <div className="flex flex-col gap-4">
-            {appUsers.length === 0 && (
-              <Card><CardBody className="text-center py-12 text-stone-400">Inga användare registrerade</CardBody></Card>
-            )}
-            {appUsers.map((u) => (
-              <Card key={u.id}>
-                <CardBody className="flex items-start justify-between gap-4">
-                  <div className="flex gap-3 items-start">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${u.approved ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                      <Users className="w-4 h-4" />
-                    </div>
+          <div>
+            {/* Lägg till användare */}
+            <div className="flex justify-end mb-4">
+              <Button variant="sand" size="sm" onClick={() => { setShowUserForm(!showUserForm); setUserFormError(""); }}>
+                <Plus className="w-4 h-4" />
+                Lägg till användare
+              </Button>
+            </div>
+
+            {showUserForm && (
+              <Card className="mb-6">
+                <CardHeader><p className="font-semibold text-forest-800">Ny användare</p></CardHeader>
+                <CardBody>
+                  <form onSubmit={handleAddUser} className="flex flex-col gap-4">
+                    <Input label="Namn" required value={userForm.name} onChange={(e) => setUserForm((p) => ({ ...p, name: e.target.value }))} />
+                    <Input label="E-post" type="email" required value={userForm.email} onChange={(e) => setUserForm((p) => ({ ...p, email: e.target.value }))} />
+                    <Input label="Lösenord" type="password" required value={userForm.password} onChange={(e) => setUserForm((p) => ({ ...p, password: e.target.value }))} />
                     <div>
-                      <p className="font-semibold text-forest-800">{u.name}</p>
-                      <p className="text-sm text-stone-500">{u.email}</p>
-                      <div className="flex gap-2 mt-1">
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${u.approved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                          {u.approved ? "Godkänd" : "Väntar godkännande"}
-                        </span>
-                        {u.mfaEnabled && (
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">MFA aktivt</span>
-                        )}
-                      </div>
-                      <p className="text-xs text-stone-400 mt-1">Registrerad {new Date(u.createdAt).toLocaleDateString("sv-SE")}</p>
-                    </div>
-                  </div>
-                  {!u.approved && (
-                    <div className="flex gap-2 shrink-0">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => handleUserAction(u.id, "approve")}
+                      <label className="text-sm font-medium text-forest-800 block mb-1">Roll</label>
+                      <select
+                        value={userForm.role}
+                        onChange={(e) => setUserForm((p) => ({ ...p, role: e.target.value }))}
+                        className="w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sand-400"
                       >
-                        <UserCheck className="w-4 h-4" />
-                        Godkänn
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => handleUserAction(u.id, "reject")}
-                      >
-                        <UserX className="w-4 h-4" />
-                        Avslå
-                      </Button>
+                        <option value="USER">Användare</option>
+                        <option value="ADMIN">Admin</option>
+                      </select>
                     </div>
-                  )}
+                    {userFormError && <p className="text-sm text-red-600">{userFormError}</p>}
+                    <div className="flex gap-3">
+                      <Button type="submit" variant="sand" disabled={userFormLoading}>{userFormLoading ? "Sparar..." : "Skapa konto"}</Button>
+                      <Button type="button" variant="ghost" onClick={() => setShowUserForm(false)}>Avbryt</Button>
+                    </div>
+                  </form>
                 </CardBody>
               </Card>
-            ))}
+            )}
+
+            <div className="flex flex-col gap-3">
+              {appUsers.length === 0 && (
+                <Card><CardBody className="text-center py-12 text-stone-400">Inga användare registrerade</CardBody></Card>
+              )}
+              {appUsers.map((u) => (
+                <Card key={u.id}>
+                  <CardBody className="flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex gap-3 items-start">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${u.role === "ADMIN" ? "bg-forest-100 text-forest-700" : u.approved ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                          {u.role === "ADMIN" ? <Shield className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-forest-800">{u.name}</p>
+                          <p className="text-sm text-stone-500">{u.email}</p>
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            {u.role === "ADMIN" && (
+                              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-forest-100 text-forest-700">Admin</span>
+                            )}
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${u.approved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                              {u.approved ? "Godkänd" : "Väntar godkännande"}
+                            </span>
+                            {u.mfaEnabled && (
+                              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">MFA aktivt</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-stone-400 mt-1">Registrerad {new Date(u.createdAt).toLocaleDateString("sv-SE")}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 shrink-0">
+                        {!u.approved && (
+                          <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handleUserAction(u.id, "approve")}>
+                            <UserCheck className="w-4 h-4" />
+                            Godkänn
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-stone-500 hover:text-forest-800"
+                          onClick={() => { setChangePwId(changePwId === u.id ? null : u.id); setNewPassword(""); }}
+                        >
+                          <KeyRound className="w-4 h-4" />
+                        </Button>
+                        <button
+                          onClick={() => handleDeleteUser(u.id)}
+                          className="text-stone-300 hover:text-red-500 transition-colors p-1"
+                          title="Ta bort användare"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Byt lösenord-panel */}
+                    {changePwId === u.id && (
+                      <div className="flex gap-2 items-center pt-2 border-t border-stone-100">
+                        <Input
+                          type="password"
+                          placeholder="Nytt lösenord (minst 6 tecken)"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                        />
+                        <Button
+                          size="sm"
+                          variant="sand"
+                          disabled={newPassword.length < 6 || pwLoading}
+                          onClick={() => handleChangePassword(u.id)}
+                        >
+                          {pwLoading ? "Sparar..." : "Spara"}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setChangePwId(null); setNewPassword(""); }}>
+                          Avbryt
+                        </Button>
+                      </div>
+                    )}
+                  </CardBody>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
       </div>
