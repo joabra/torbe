@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +10,13 @@ interface Booking {
   checkOut: string;
   guestName?: string | null;
   user?: { name: string } | null;
+}
+
+interface FlightDeal {
+  date: string;
+  price: number;
+  currency: string;
+  deepLink: string;
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -28,6 +36,12 @@ function getBookingForDate(date: Date, bookings: Booking[]): Booking | undefined
   });
 }
 
+function getFlightForDate(date: Date, flights: FlightDeal[]): FlightDeal | undefined {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const key = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return flights.find((f) => f.date === key);
+}
+
 function firstNameOf(booking: Booking): string {
   const fullName = booking.user?.name ?? booking.guestName ?? "";
   return fullName.split(" ")[0];
@@ -40,7 +54,9 @@ const MONTHS = [
 ];
 
 export function BookingCalendar() {
+  const { data: session } = useSession();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [flights, setFlights] = useState<FlightDeal[]>([]);
   const [today] = useState(new Date());
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
 
@@ -50,6 +66,18 @@ export function BookingCalendar() {
       .then(setBookings)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth() + 1;
+    fetch(`/api/flights?year=${year}&month=${month}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setFlights(data);
+      })
+      .catch(() => {});
+  }, [session, viewDate]);
 
   function prevMonth() {
     setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
@@ -102,12 +130,13 @@ export function BookingCalendar() {
           const booked = !!booking;
           const isToday = isSameDay(date, today);
           const firstName = booked ? firstNameOf(booking!) : "";
+          const flight = session ? getFlightForDate(date, flights) : undefined;
 
           return (
             <div
               key={date.toISOString()}
               className={cn(
-                "aspect-square flex flex-col items-center justify-center rounded-full text-sm font-medium transition-colors",
+                "aspect-square flex flex-col items-center justify-start pt-1 rounded-xl text-sm font-medium transition-colors",
                 past && "text-stone-300",
                 !past && !booked && "text-forest-900 hover:bg-forest-50 cursor-default",
                 booked && "bg-red-100 text-red-700 font-semibold",
@@ -117,6 +146,17 @@ export function BookingCalendar() {
               <span className={cn(booked && firstName ? "leading-none" : "")}>{date.getDate()}</span>
               {booked && firstName && (
                 <span className="text-[8px] leading-none mt-0.5 font-normal truncate max-w-full px-0.5">{firstName}</span>
+              )}
+              {flight && (
+                <a
+                  href={flight.deepLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-0.5 bg-green-100 text-green-700 text-[8px] font-semibold px-1 rounded-full leading-none hover:bg-green-200 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {flight.price} kr
+                </a>
               )}
             </div>
           );
@@ -137,6 +177,12 @@ export function BookingCalendar() {
           <div className="w-3 h-3 rounded-full bg-white border border-stone-200" />
           <span className="text-xs text-stone-500">Ledig</span>
         </div>
+        {session && (
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-green-100 border border-green-300" />
+            <span className="text-xs text-stone-500">Billigt flyg</span>
+          </div>
+        )}
       </div>
     </div>
   );
