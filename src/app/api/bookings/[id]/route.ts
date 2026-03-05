@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { emailUserBookingStatus } from "@/lib/email";
 import { z } from "zod";
 
 const schema = z.object({
@@ -52,6 +53,12 @@ export async function PATCH(
       data: { status, adminNote },
       include: { user: { select: { name: true, email: true } } },
     });
+
+    // Notifiera användaren om statusbytet (fire-and-forget)
+    void emailUserBookingStatus(
+      { status, checkIn: updated.checkIn, checkOut: updated.checkOut, adminNote: updated.adminNote },
+      { name: updated.user.name, email: updated.user.email }
+    );
 
     return NextResponse.json(updated);
   } catch {

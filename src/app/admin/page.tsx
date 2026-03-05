@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Check, X, Trash2, Users, CalendarDays, MessageSquare, Plus, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal } from "lucide-react";
+import { Check, X, Trash2, Users, CalendarDays, MessageSquare, Plus, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal, UserCheck, UserX } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -30,6 +30,15 @@ interface Tip {
   website?: string;
 }
 
+interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  approved: boolean;
+  mfaEnabled: boolean;
+  createdAt: string;
+}
+
 const statusVariant = { PENDING: "pending" as const, APPROVED: "approved" as const, REJECTED: "rejected" as const };
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -45,9 +54,10 @@ export default function AdminPage() {
   const router = useRouter();
   const role = (session?.user as { role?: string })?.role;
 
-  const [tab, setTab] = useState<"bookings" | "tips">("bookings");
+  const [tab, setTab] = useState<"bookings" | "tips" | "users">("bookings");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [tips, setTips] = useState<Tip[]>([]);
+  const [appUsers, setAppUsers] = useState<AppUser[]>([]);
   const [adminNote, setAdminNote] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
@@ -66,9 +76,11 @@ export default function AdminPage() {
       Promise.all([
         fetch("/api/admin/bookings").then((r) => r.json()),
         fetch("/api/tips").then((r) => r.json()),
-      ]).then(([b, t]) => {
+        fetch("/api/admin/users").then((r) => r.json()),
+      ]).then(([b, t, u]) => {
         setBookings(b);
         setTips(t);
+        setAppUsers(u);
       }).finally(() => setLoading(false));
     }
   }, [status, role, router]);
@@ -117,6 +129,23 @@ export default function AdminPage() {
     if (res.ok) setTips((prev) => prev.filter((t) => t.id !== id));
   }
 
+  async function handleUserAction(id: string, action: "approve" | "reject") {
+    const confirmMsg = action === "reject" ? "Avslå och ta bort detta konto?" : "Godkänn detta konto?";
+    if (!confirm(confirmMsg)) return;
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    if (res.ok) {
+      if (action === "approve") {
+        setAppUsers((prev) => prev.map((u) => u.id === id ? { ...u, approved: true } : u));
+      } else {
+        setAppUsers((prev) => prev.filter((u) => u.id !== id));
+      }
+    }
+  }
+
   if (status === "loading" || loading) {
     return (
       <div className="pt-28 min-h-screen flex items-center justify-center">
@@ -126,6 +155,7 @@ export default function AdminPage() {
   }
 
   const pending = bookings.filter((b) => b.status === "PENDING");
+  const pendingUsers = appUsers.filter((u) => !u.approved);
 
   return (
     <div className="pt-28 pb-20 min-h-screen bg-stone-50 px-6">
@@ -138,9 +168,9 @@ export default function AdminPage() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           {[
-            { label: "Väntande", value: pending.length, color: "bg-amber-50 text-amber-700" },
-            { label: "Godkända", value: bookings.filter((b) => b.status === "APPROVED").length, color: "bg-emerald-50 text-emerald-700" },
-            { label: "Tips", value: tips.length, color: "bg-forest-50 text-forest-700" },
+            { label: "Väntande bokningar", value: pending.length, color: "bg-amber-50 text-amber-700" },
+            { label: "Godkända bokningar", value: bookings.filter((b) => b.status === "APPROVED").length, color: "bg-emerald-50 text-emerald-700" },
+            { label: "Användare inväntar", value: pendingUsers.length, color: pendingUsers.length > 0 ? "bg-red-50 text-red-700" : "bg-forest-50 text-forest-700" },
           ].map((s) => (
             <div key={s.label} className={`${s.color} rounded-2xl p-4 text-center`}>
               <p className="text-3xl font-bold">{s.value}</p>
@@ -151,13 +181,13 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6">
-          {(["bookings", "tips"] as const).map((t) => (
+          {(["bookings", "tips", "users"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${tab === t ? "bg-forest-800 text-white" : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200"}`}
             >
-              {t === "bookings" ? `Bokningar (${pending.length} väntande)` : "Tips & aktiviteter"}
+              {t === "bookings" ? `Bokningar (${pending.length} väntande)` : t === "tips" ? "Tips & aktiviteter" : `Användare${pendingUsers.length > 0 ? ` (⚠️ ${pendingUsers.length})` : ""}`}
             </button>
           ))}
         </div>
@@ -304,6 +334,60 @@ export default function AdminPage() {
                 <Card><CardBody className="text-center py-12 text-stone-400">Inga tips tillagda än</CardBody></Card>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Users tab */}
+        {tab === "users" && (
+          <div className="flex flex-col gap-4">
+            {appUsers.length === 0 && (
+              <Card><CardBody className="text-center py-12 text-stone-400">Inga användare registrerade</CardBody></Card>
+            )}
+            {appUsers.map((u) => (
+              <Card key={u.id}>
+                <CardBody className="flex items-start justify-between gap-4">
+                  <div className="flex gap-3 items-start">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${u.approved ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-forest-800">{u.name}</p>
+                      <p className="text-sm text-stone-500">{u.email}</p>
+                      <div className="flex gap-2 mt-1">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${u.approved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                          {u.approved ? "Godkänd" : "Väntar godkännande"}
+                        </span>
+                        {u.mfaEnabled && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">MFA aktivt</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-stone-400 mt-1">Registrerad {new Date(u.createdAt).toLocaleDateString("sv-SE")}</p>
+                    </div>
+                  </div>
+                  {!u.approved && (
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => handleUserAction(u.id, "approve")}
+                      >
+                        <UserCheck className="w-4 h-4" />
+                        Godkänn
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleUserAction(u.id, "reject")}
+                      >
+                        <UserX className="w-4 h-4" />
+                        Avslå
+                      </Button>
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
+            ))}
           </div>
         )}
       </div>

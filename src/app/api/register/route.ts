@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const mfaSecret = authenticator.generateSecret();
 
     await prisma.user.create({
-      data: { name, email, password: hash, role: "USER", mfaSecret, mfaEnabled: false },
+      data: { name, email, password: hash, role: "USER", mfaSecret, mfaEnabled: false, approved: false },
     });
 
     const otpUri = authenticator.keyuri(email, "Torbe", mfaSecret);

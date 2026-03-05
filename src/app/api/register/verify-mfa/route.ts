@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticator } from "@otplib/preset-default";
+import { emailAdminNewUser, emailUserAwaitingApproval } from "@/lib/email";
 import { z } from "zod";
 
 const schema = z.object({
@@ -36,10 +37,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Felaktig kod — försök igen" }, { status: 422 });
     }
 
-    await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { email },
       data: { mfaEnabled: true },
     });
+
+    // Notifiera admin och bekräfta för användaren (fire-and-forget)
+    void Promise.all([
+      emailAdminNewUser({ name: updated.name, email: updated.email }),
+      emailUserAwaitingApproval({ name: updated.name, email: updated.email }),
+    ]);
 
     return NextResponse.json({ ok: true });
   } catch {

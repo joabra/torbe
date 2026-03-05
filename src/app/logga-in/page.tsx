@@ -50,7 +50,9 @@ function LoggaInForm() {
       });
       if (check.ok) {
         const data = await check.json();
-        if (data.mfaRequired) {
+        if (data.notApproved) {
+          setError("Ditt konto väntar på godkännande av administratören. Du får ett e-postmeddelande när det är klart.");
+        } else if (data.mfaRequired) {
           setStep("mfa");
         } else if (data.valid) {
           // Inloggning utan MFA (gammal admin/seed-konto)

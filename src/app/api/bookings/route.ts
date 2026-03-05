@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { emailAdminNewBooking } from "@/lib/email";
 import { z } from "zod";
 
 const schema = z.object({
@@ -63,6 +64,15 @@ export async function POST(req: NextRequest) {
     const booking = await prisma.booking.create({
       data: { userId, checkIn: checkInDate, checkOut: checkOutDate, guests, message, status: "PENDING" },
     });
+
+    // Notifiera admin (fire-and-forget)
+    const userObj = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
+    if (userObj) {
+      void emailAdminNewBooking(
+        { checkIn: checkInDate, checkOut: checkOutDate, guests, message },
+        userObj
+      );
+    }
 
     return NextResponse.json(booking, { status: 201 });
   } catch {

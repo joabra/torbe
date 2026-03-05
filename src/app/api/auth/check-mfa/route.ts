@@ -28,6 +28,10 @@ export async function POST(req: NextRequest) {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return NextResponse.json({ valid: false, mfaRequired: false });
 
+    if (!user.approved) {
+      return NextResponse.json({ valid: true, mfaRequired: false, notApproved: true });
+    }
+
     return NextResponse.json({ valid: true, mfaRequired: user.mfaEnabled });
   } catch {
     return NextResponse.json({ valid: false, mfaRequired: false }, { status: 500 });

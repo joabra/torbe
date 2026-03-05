@@ -30,6 +30,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const valid = await bcrypt.compare(password, user.password);
         if (!valid) return null;
 
+        // Kontrollera att kontot är godkänt av admin
+        if (!user.approved) return null;
+
         // MFA-kontroll: om MFA är aktiverat måste koden anges
         if (user.mfaEnabled && user.mfaSecret) {
           if (!mfaCode) return null; // ingen kod angiven
