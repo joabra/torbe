@@ -21,9 +21,9 @@ export function formatDateShort(date: Date | string): string {
   });
 }
 
-export function statusLabel(status: string): string {
+export function statusLabel(status: string, isAdmin = false): string {
   const labels: Record<string, string> = {
-    PENDING: "Väntar på godkännande",
+    PENDING: isAdmin ? "Önskning (ej godkänd)" : "Önskning",
     APPROVED: "Godkänd",
     REJECTED: "Avslåd",
   };

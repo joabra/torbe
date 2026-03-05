@@ -28,8 +28,9 @@ enum Role {
 
 model Booking {
   id        String        @id @default(cuid())
-  userId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestName String?
   checkIn   DateTime
   checkOut  DateTime
   guests    Int

@@ -14,11 +14,12 @@ interface Booking {
   checkIn: string;
   checkOut: string;
   guests: number;
+  guestName?: string;
   message?: string;
   adminNote?: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
   createdAt: string;
-  user: { id: string; name: string; email: string };
+  user?: { id: string; name: string; email: string } | null;
 }
 
 interface Tip {
@@ -69,6 +70,12 @@ export default function AdminPage() {
   });
   const [tipLoading, setTipLoading] = useState(false);
 
+  // New booking form (admin)
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [bookingForm, setBookingForm] = useState({ guestName: "", checkIn: "", checkOut: "", guests: 2, message: "", adminNote: "", status: "APPROVED" });
+  const [bookingFormLoading, setBookingFormLoading] = useState(false);
+  const [bookingFormError, setBookingFormError] = useState("");
+
   // User management
   const [showUserForm, setShowUserForm] = useState(false);
   const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "USER" });
@@ -114,6 +121,26 @@ export default function AdminPage() {
     if (!confirm("Är du säker på att du vill ta bort denna bokning?")) return;
     const res = await fetch(`/api/bookings/${id}`, { method: "DELETE" });
     if (res.ok) setBookings((prev) => prev.filter((b) => b.id !== id));
+  }
+
+  async function handleAddBooking(e: React.FormEvent) {
+    e.preventDefault();
+    setBookingFormLoading(true);
+    setBookingFormError("");
+    const res = await fetch("/api/admin/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...bookingForm, guests: Number(bookingForm.guests) }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setBookings((prev) => [data, ...prev]);
+      setBookingForm({ guestName: "", checkIn: "", checkOut: "", guests: 2, message: "", adminNote: "", status: "APPROVED" });
+      setShowBookingForm(false);
+    } else {
+      setBookingFormError(data.error ?? "Något gick fel");
+    }
+    setBookingFormLoading(false);
   }
 
   async function handleAddTip(e: React.FormEvent) {
@@ -246,7 +273,7 @@ export default function AdminPage() {
               onClick={() => setTab(t)}
               className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${tab === t ? "bg-forest-800 text-white" : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200"}`}
             >
-              {t === "bookings" ? `Bokningar (${pending.length} väntande)` : t === "tips" ? "Tips & aktiviteter" : `Användare${pendingUsers.length > 0 ? ` (⚠️ ${pendingUsers.length})` : ""}`}
+              {t === "bookings" ? `Bokningar (${pending.length} önskningar)` : t === "tips" ? "Tips & aktiviteter" : `Användare${pendingUsers.length > 0 ? ` (⚠️ ${pendingUsers.length})` : ""}`}
             </button>
           ))}
         </div>
@@ -254,6 +281,47 @@ export default function AdminPage() {
         {/* Bookings tab */}
         {tab === "bookings" && (
           <div className="flex flex-col gap-4">
+            {/* Lägg till bokning */}
+            <div className="flex justify-end">
+              <Button variant="sand" size="sm" onClick={() => { setShowBookingForm(!showBookingForm); setBookingFormError(""); }}>
+                <Plus className="w-4 h-4" />
+                Lägg till bokning
+              </Button>
+            </div>
+
+            {showBookingForm && (
+              <Card>
+                <CardHeader><p className="font-semibold text-forest-800">Ny bokning</p></CardHeader>
+                <CardBody>
+                  <form onSubmit={handleAddBooking} className="flex flex-col gap-4">
+                    <Input label="Gästens namn" required value={bookingForm.guestName} onChange={(e) => setBookingForm((p) => ({ ...p, guestName: e.target.value }))} />
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input label="Incheckning" type="date" required value={bookingForm.checkIn} onChange={(e) => setBookingForm((p) => ({ ...p, checkIn: e.target.value }))} />
+                      <Input label="Utcheckning" type="date" required value={bookingForm.checkOut} onChange={(e) => setBookingForm((p) => ({ ...p, checkOut: e.target.value }))} />
+                    </div>
+                    <Input label="Antal gäster" type="number" min={1} max={20} required value={bookingForm.guests} onChange={(e) => setBookingForm((p) => ({ ...p, guests: Number(e.target.value) }))} />
+                    <div>
+                      <label className="text-sm font-medium text-forest-800 block mb-1">Status</label>
+                      <select
+                        value={bookingForm.status}
+                        onChange={(e) => setBookingForm((p) => ({ ...p, status: e.target.value }))}
+                        className="w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sand-400"
+                      >
+                        <option value="APPROVED">Godkänd</option>
+                        <option value="PENDING">Önskning</option>
+                      </select>
+                    </div>
+                    <Textarea label="Anteckning (synlig för admin)" value={bookingForm.adminNote} onChange={(e) => setBookingForm((p) => ({ ...p, adminNote: e.target.value }))} />
+                    {bookingFormError && <p className="text-sm text-red-600">{bookingFormError}</p>}
+                    <div className="flex gap-3">
+                      <Button type="submit" variant="sand" disabled={bookingFormLoading}>{bookingFormLoading ? "Sparar..." : "Spara bokning"}</Button>
+                      <Button type="button" variant="ghost" onClick={() => setShowBookingForm(false)}>Avbryt</Button>
+                    </div>
+                  </form>
+                </CardBody>
+              </Card>
+            )}
+
             {bookings.length === 0 && (
               <Card><CardBody className="text-center py-12 text-stone-400">Inga bokningar än</CardBody></Card>
             )}
@@ -266,12 +334,13 @@ export default function AdminPage() {
                       {formatDateShort(booking.checkIn)} → {formatDateShort(booking.checkOut)}
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-sm text-stone-500">
-                      <span className="font-medium text-stone-700">{booking.user.name}</span>
-                      <span>{booking.user.email}</span>
+                      <span className="font-medium text-stone-700">{booking.user?.name ?? booking.guestName ?? "Okänd gäst"}</span>
+                      {booking.user?.email && <span>{booking.user.email}</span>}
+                      {!booking.user && booking.guestName && <span className="text-xs bg-stone-100 text-stone-500 rounded px-1.5 py-0.5">Manuell bokning</span>}
                       <span className="flex items-center gap-1"><Users className="w-3 h-3" />{booking.guests}</span>
                     </div>
                   </div>
-                  <Badge variant={statusVariant[booking.status]}>{statusLabel(booking.status)}</Badge>
+                  <Badge variant={statusVariant[booking.status]}>{statusLabel(booking.status, true)}</Badge>
                 </CardHeader>
                 <CardBody>
                   {booking.message && (

@@ -55,10 +55,12 @@ export async function PATCH(
     });
 
     // Notifiera användaren om statusbytet (fire-and-forget)
-    void emailUserBookingStatus(
-      { status, checkIn: updated.checkIn, checkOut: updated.checkOut, adminNote: updated.adminNote },
-      { name: updated.user.name, email: updated.user.email }
-    );
+    if (updated.user) {
+      void emailUserBookingStatus(
+        { status, checkIn: updated.checkIn, checkOut: updated.checkOut, adminNote: updated.adminNote },
+        { name: updated.user.name, email: updated.user.email }
+      );
+    }
 
     return NextResponse.json(updated);
   } catch {
