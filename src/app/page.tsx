@@ -57,7 +57,8 @@ export default function HomePage() {
           <div className="absolute left-8 bottom-48 md:left-16 hidden md:block">
             <div className="bg-white/90 backdrop-blur rounded-2xl p-4 shadow-lg flex flex-col items-center gap-1">
               <MapPin className="w-6 h-6 text-forest-700" />
-              <span className="text-[10px] text-stone-500 font-semibold">Spanien</span>
+              <span className="text-[10px] text-stone-500 font-semibold">Mil Palmeras</span>
+              <span className="text-[9px] text-stone-400">Costa Blanca, Alicante</span>
             </div>
           </div>
         </div>
@@ -85,16 +86,16 @@ export default function HomePage() {
               Din perfekta bas<br />på solkusten
             </h2>
             <p className="mt-5 text-stone-500 leading-relaxed">
-              En rymlig och välutrustad lägenhet nära stranden, omgiven av natur och sol.
-              Perfekt för familjeträffar, sommarsemester eller en lugn retreat.
-              Fullt utrustat kök, privat terrass och bekväm inredning.
+              Vår lägenhet i Mil Palmeras, Pilar de la Horadada — en lugn kustort på Costa Blanca
+              med Blue Flag-strand, kristallklart vatten och 300 soldagar om året. Nära Torre de
+              la Horadada, Torrevieja och Mar Menor. Perfekt för familjeträffar och avkoppling.
             </p>
             <div className="mt-8 grid grid-cols-2 gap-4">
               {[
                 { label: "Sovrum", value: "3" },
                 { label: "Badrum", value: "2" },
                 { label: "Max gäster", value: "8" },
-                { label: "Till stranden", value: "200 m" },
+                { label: "Till stranden", value: "50 m" },
               ].map((stat) => (
                 <div key={stat.label} className="bg-forest-50 rounded-2xl p-4 border border-forest-100">
                   <p className="text-2xl font-bold text-forest-800">{stat.value}</p>
@@ -109,14 +110,19 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Photo grid placeholder */}
+          {/* Photo grid */}
           <div className="grid grid-cols-2 gap-3">
-            {["🌊", "🏠", "🌅", "🍊"].map((emoji, i) => (
+            {[
+              { src: "/tips/beach.jpg", alt: "Stranden vid Mil Palmeras" },
+              { src: "/tips/restaurant.jpg", alt: "Färsk skaldjur på Costa Blanca" },
+              { src: "/tips/saltlake.jpg", alt: "Torreviejas rosa saltsjö" },
+              { src: "/tips/market.jpg", alt: "Lokal marknad" },
+            ].map((img, i) => (
               <div
                 key={i}
-                className="aspect-square rounded-2xl bg-forest-50 border border-forest-100 flex items-center justify-center text-5xl hover:scale-[1.02] transition-transform"
+                className="aspect-square rounded-2xl overflow-hidden bg-forest-50 border border-forest-100 hover:scale-[1.02] transition-transform"
               >
-                {emoji}
+                <img src={img.src} alt={img.alt} className="w-full h-full object-cover" />
               </div>
             ))}
           </div>

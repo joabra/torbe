@@ -49,12 +49,16 @@ export default function AktiviteterPage() {
   const filtered = filter === "ALL" ? tips : tips.filter((t) => t.category === filter);
 
   const sampleTips: Tip[] = [
-    { id: "s1", category: "RESTAURANT", title: "La Taberna del Mar", description: "Fantastisk fisk och skaldjur direkt vid stranden. Prova deras paella – den är legendarisk!", address: "Paseo Marítimo, Marbella" },
-    { id: "s2", category: "EXCURSION", title: "Vandring till La Concha", description: "Vacker vandring med panoramautsikt över Costa del Sol. Ca 3 timmar tur och retur.", address: "Sierra de las Nieves" },
-    { id: "s3", category: "MARKET", title: "Marknaden i Estepona", description: "Varje lördag morgon 09–14. Färska grönsaker, lokala delikatesser och hantverk.", address: "Plaza de las Flores, Estepona" },
-    { id: "s4", category: "EVENT", title: "Flamenco-show", description: "Äkta flamenco i traditionell miljö. Boka bord i förväg, populärt bland turister som lokalbefolkning.", address: "Tablao Flamenco, Málaga" },
-    { id: "s5", category: "EXCURSION", title: "Ronda – stadens berg", description: "En av Spaniens vackraste städer. Besök den spektakulära bron Puente Nuevo och gamla stadsdelen.", address: "Ronda, Málaga" },
-    { id: "s6", category: "RESTAURANT", title: "El Chiringuito Playa", description: "Perfekt för lunch med fötterna i sanden. Grillad fisk, sangria och solnedgång.", address: "Playa de la Carihuela, Torremolinos" },
+    { id: "s1", category: "RESTAURANT", title: "El Varadero – Torre de la Horadada", description: "Topprestaurang i den charmiga fiskehamnen Torre de la Horadada, 2 km norrut. Perfekt friterad fisk och arroz caldoso.", address: "Puerto de Torre de la Horadada", imageUrl: "/tips/restaurant.jpg", mapUrl: "https://maps.google.com/?q=Torre+de+la+Horadada+puerto" },
+    { id: "s2", category: "RESTAURANT", title: "Chiringuitos på Playa Mil Palmeras", description: "Strandbarerna längs vår strand serverar bocadillos, grillad fisk och kalla drycker. Perfekt lunch med fötterna i sanden.", address: "Playa de Mil Palmeras", imageUrl: "/tips/beach.jpg" },
+    { id: "s3", category: "EXCURSION", title: "Lo Pagán – Gyttjebad & flamingos", description: "Bara 8 km söderut kan du bada i terapeutisk saltgyttja vid Mar Menors strand. Flamingor samlas i angränsande saltdammar. Gratis!", address: "Playa de Lo Pagán, San Pedro del Pinatar", imageUrl: "/tips/saltlake.jpg" },
+    { id: "s4", category: "EXCURSION", title: "Torrevieja – Rosa saltsjöar", description: "15 km norrut ligger Europas mest spektakulära rosa saltsjöar med flamingor och naturpark. Glöm inte havspromenaden!", address: "Torrevieja, Alicante", imageUrl: "/tips/saltlake.jpg", website: "https://www.torrevieja.es" },
+    { id: "s5", category: "EXCURSION", title: "Alicante – Slottet Santa Bárbara", description: "66 km norrut. Klättra upp till renässansslottet med panoramautsikt och promenera i gamla stan El Barrio.", address: "Castillo de Santa Bárbara, Alicante", imageUrl: "/tips/castle.jpg" },
+    { id: "s6", category: "MARKET", title: "Torreviejas fredagsmarknad", description: "En av Costa Blancas största utomhusmarknader varje fredag 09–14. Kläder, lokala delikatesser, kryddor och hantverk.", address: "Torrevieja", imageUrl: "/tips/market.jpg" },
+    { id: "s7", category: "MARKET", title: "La Zenia Boulevard", description: "Stort utomhusshopping-center 10 km norrut. Zara, H&M, restauranger och bio under spansk sol. Öppet till 22:00.", address: "Orihuela Costa", imageUrl: "/tips/shopping.jpg", website: "https://www.lazeniaboulevardonline.com" },
+    { id: "s8", category: "EVENT", title: "Midsommarfirande – San Juan", description: "Natten till 24 juni tänds jättebål på alla stränder. Spanjorerna hoppar över elden, äter druvor i midnatt. Magiskt!", address: "Playa de Mil Palmeras & Torre de la Horadada", imageUrl: "/tips/beach.jpg" },
+    { id: "s9", category: "OTHER", title: "Torre de la Horadada – Vakttorn (1591)", description: "Det medeltida vakttornet i angränsande byn byggdes 1591 mot pirater. Promenera längs charming hamnpromenad.", address: "Torre de la Horadada", imageUrl: "/tips/castle.jpg" },
+    { id: "s10", category: "OTHER", title: "Romersk stentäkt – Playa Mil Palmeras", description: "På norra delen av vår strand finns rester av en romersk stentäkt från antiken — historia alldeles intill sanden!", address: "Playa de Mil Palmeras (norra delen)", imageUrl: "/tips/beach.jpg" },
   ];
 
   const displayTips = tips.length > 0 ? filtered : sampleTips.filter((t) => filter === "ALL" || t.category === filter);
@@ -67,8 +71,8 @@ export default function AktiviteterPage() {
           <span className="text-sand-500 text-sm font-semibold uppercase tracking-widest">Utforska</span>
           <h1 className="mt-3 text-4xl font-bold text-forest-900">Aktiviteter & Tips</h1>
           <p className="mt-3 text-stone-500 max-w-xl mx-auto">
-            Det bästa Spanien har att erbjuda — restauranger, utflykter, marknader och event
-            nära lägenheten.
+            Det bästa av Costa Blanca — restauranger, utflykter, marknader och event nära
+            lägenheten i Mil Palmeras.
           </p>
         </div>
 
@@ -99,10 +103,16 @@ export default function AktiviteterPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {displayTips.map((tip) => (
               <Card key={tip.id} className="hover:shadow-md hover:-translate-y-0.5 transition-all">
-                {/* Card top with emoji */}
-                <div className="h-36 bg-gradient-to-br from-forest-50 to-sand-100 flex items-center justify-center text-6xl">
-                  {categoryEmoji[tip.category]}
-                </div>
+                {/* Card top with image or emoji fallback */}
+                {tip.imageUrl ? (
+                  <div className="h-36 overflow-hidden">
+                    <img src={tip.imageUrl} alt={tip.title} className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="h-36 bg-gradient-to-br from-forest-50 to-sand-100 flex items-center justify-center text-6xl">
+                    {categoryEmoji[tip.category]}
+                  </div>
+                )}
                 <CardBody>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 className="font-bold text-forest-800 text-base leading-tight">{tip.title}</h3>
