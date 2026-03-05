@@ -7,7 +7,7 @@ export function FlightInfo() {
 
   return (
     <p className="mt-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2 inline-block">
-      ✈️ Gröna prismärken visar billiga direktflyg från Landvetter (GOT) eller Växjö (VXO) till Alicante — klicka för att boka på Kiwi.com.
+      ✈️ Gröna prismärken visar billiga direktflyg från Landvetter (GOT) eller Växjö (VXO) till Alicante — klicka för att söka på Skyscanner.
     </p>
   );
 }
