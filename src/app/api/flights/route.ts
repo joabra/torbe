@@ -16,7 +16,10 @@ interface FlightDeal {
 
 let tokenCache: { token: string; expires: number } | null = null;
 
-async function getAmadeusToken(): Promise<string> {
+async function getAmadeusToken(
+  clientId: string,
+  clientSecret: string,
+): Promise<string> {
   if (tokenCache && Date.now() < tokenCache.expires) {
     return tokenCache.token;
   }
@@ -29,8 +32,8 @@ async function getAmadeusToken(): Promise<string> {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "client_credentials",
-      client_id: process.env.AMADEUS_API_KEY!,
-      client_secret: process.env.AMADEUS_API_SECRET!,
+      client_id: clientId,
+      client_secret: clientSecret,
     }),
   });
 
@@ -133,7 +136,7 @@ export async function GET(req: NextRequest) {
 
   let token: string;
   try {
-    token = await getAmadeusToken();
+    token = await getAmadeusToken(apiKey, apiSecret);
   } catch {
     return NextResponse.json(
       { error: "Kunde inte autentisera mot Amadeus" },
@@ -150,28 +153,28 @@ export async function GET(req: NextRequest) {
   const destination = "ALC";
   const currency = "SEK";
 
-  // Bygg lista med datum att söka (bara framtida datum)
-  const datesToSearch: string[] = [];
+  // Bygg lista med sökningar: origin × datum (bara framtida datum)
+  const searches: { date: string; origin: string }[] = [];
   for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, month - 1, d);
-    if (date >= today) {
-      datesToSearch.push(`${year}-${pad(month)}-${pad(d)}`);
+    const dateObj = new Date(year, month - 1, d);
+    if (dateObj >= today) {
+      const dateStr = `${year}-${pad(month)}-${pad(d)}`;
+      for (const origin of origins) {
+        searches.push({ date: dateStr, origin });
+      }
     }
   }
 
-  // Sök alla origin × datum parallellt i batchar om 10
-  const tasks = datesToSearch.flatMap((date) =>
-    origins.map(
-      (origin) => () =>
-        searchFlightsForDate(token, origin, destination, date, currency),
-    ),
-  );
-
+  // Sök parallellt i batchar om 10 (Amadeus free-tier: 10 req/s)
   const results: (Awaited<ReturnType<typeof searchFlightsForDate>>)[] = [];
   const BATCH_SIZE = 10;
-  for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
-    const batch = tasks.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.all(batch.map((fn) => fn()));
+  for (let i = 0; i < searches.length; i += BATCH_SIZE) {
+    const batch = searches.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map((s) =>
+        searchFlightsForDate(token, s.origin, destination, s.date, currency),
+      ),
+    );
     results.push(...batchResults);
   }
 
