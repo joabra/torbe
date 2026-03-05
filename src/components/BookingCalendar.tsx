@@ -7,6 +7,8 @@ interface Booking {
   id: string;
   checkIn: string;
   checkOut: string;
+  guestName?: string | null;
+  user?: { name: string } | null;
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -18,12 +20,17 @@ function isInRange(date: Date, start: Date, end: Date) {
   return d > start.getTime() && d < end.getTime();
 }
 
-function isBooked(date: Date, bookings: Booking[]) {
-  return bookings.some((b) => {
+function getBookingForDate(date: Date, bookings: Booking[]): Booking | undefined {
+  return bookings.find((b) => {
     const s = new Date(b.checkIn);
     const e = new Date(b.checkOut);
     return isSameDay(date, s) || isSameDay(date, e) || isInRange(date, s, e);
   });
+}
+
+function firstNameOf(booking: Booking): string {
+  const fullName = booking.user?.name ?? booking.guestName ?? "";
+  return fullName.split(" ")[0];
 }
 
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
@@ -91,21 +98,26 @@ export function BookingCalendar() {
         {cells.map((date, idx) => {
           if (!date) return <div key={`empty-${idx}`} />;
           const past = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-          const booked = isBooked(date, bookings);
+          const booking = getBookingForDate(date, bookings);
+          const booked = !!booking;
           const isToday = isSameDay(date, today);
+          const firstName = booked ? firstNameOf(booking!) : "";
 
           return (
             <div
               key={date.toISOString()}
               className={cn(
-                "aspect-square flex items-center justify-center rounded-full text-sm font-medium transition-colors",
+                "aspect-square flex flex-col items-center justify-center rounded-full text-sm font-medium transition-colors",
                 past && "text-stone-300",
                 !past && !booked && "text-forest-900 hover:bg-forest-50 cursor-default",
                 booked && "bg-red-100 text-red-700 font-semibold",
                 isToday && !booked && "ring-2 ring-sand-400 ring-offset-1"
               )}
             >
-              {date.getDate()}
+              <span className={cn(booked && firstName ? "leading-none" : "")}>{date.getDate()}</span>
+              {booked && firstName && (
+                <span className="text-[8px] leading-none mt-0.5 font-normal truncate max-w-full px-0.5">{firstName}</span>
+              )}
             </div>
           );
         })}

@@ -15,7 +15,7 @@ export async function GET() {
   // Return all approved bookings (public – for calendar)
   const bookings = await prisma.booking.findMany({
     where: { status: "APPROVED" },
-    select: { checkIn: true, checkOut: true, id: true },
+    select: { checkIn: true, checkOut: true, id: true, guestName: true, user: { select: { name: true } } },
   });
   return NextResponse.json(bookings);
 }

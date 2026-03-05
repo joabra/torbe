@@ -66,9 +66,11 @@ export default function AdminPage() {
   // New tip form
   const [showTipForm, setShowTipForm] = useState(false);
   const [tipForm, setTipForm] = useState({
-    category: "RESTAURANT", title: "", description: "", address: "", website: "",
+    category: "RESTAURANT", title: "", description: "", address: "", website: "", imageUrl: "",
   });
   const [tipLoading, setTipLoading] = useState(false);
+  const [tipImageLoading, setTipImageLoading] = useState(false);
+  const [tipImageError, setTipImageError] = useState("");
 
   // New booking form (admin)
   const [showBookingForm, setShowBookingForm] = useState(false);
@@ -154,10 +156,29 @@ export default function AdminPage() {
     if (res.ok) {
       const newTip = await res.json();
       setTips((prev) => [newTip, ...prev]);
-      setTipForm({ category: "RESTAURANT", title: "", description: "", address: "", website: "" });
+      setTipForm({ category: "RESTAURANT", title: "", description: "", address: "", website: "", imageUrl: "" });
       setShowTipForm(false);
     }
     setTipLoading(false);
+  }
+
+  async function handleTipImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setTipImageLoading(true);
+    setTipImageError("");
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (res.ok) {
+      setTipForm((p) => ({ ...p, imageUrl: data.url }));
+    } else {
+      setTipImageError(data.error ?? "Uppladdning misslyckades");
+    }
+    setTipImageLoading(false);
+    // Reset input so same file can be re-selected
+    e.target.value = "";
   }
 
   async function handleDeleteTip(id: string) {
@@ -426,6 +447,36 @@ export default function AdminPage() {
                     <Textarea label="Beskrivning" required value={tipForm.description} onChange={(e) => setTipForm((p) => ({ ...p, description: e.target.value }))} />
                     <Input label="Adress" value={tipForm.address} onChange={(e) => setTipForm((p) => ({ ...p, address: e.target.value }))} />
                     <Input label="Webbplats (URL)" type="url" value={tipForm.website} onChange={(e) => setTipForm((p) => ({ ...p, website: e.target.value }))} />
+
+                    {/* Bilduppladdning */}
+                    <div>
+                      <label className="text-sm font-medium text-forest-800 block mb-1">Bild</label>
+                      <div className="flex flex-col gap-2">
+                        <label className={`flex items-center gap-2 cursor-pointer w-fit px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                          tipImageLoading
+                            ? "bg-stone-100 text-stone-400 pointer-events-none"
+                            : "bg-stone-100 hover:bg-stone-200 text-forest-800"
+                        }`}>
+                          <input type="file" accept="image/*" className="hidden" onChange={handleTipImageUpload} disabled={tipImageLoading} />
+                          {tipImageLoading ? "Laddar upp..." : "Välj bild"}
+                        </label>
+                        {tipImageError && <p className="text-xs text-red-600">{tipImageError}</p>}
+                        {tipForm.imageUrl && (
+                          <div className="relative w-40">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={tipForm.imageUrl} alt="Förhandsgranskning" className="w-40 h-28 object-cover rounded-xl border border-stone-200" />
+                            <button
+                              type="button"
+                              onClick={() => setTipForm((p) => ({ ...p, imageUrl: "" }))}
+                              className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow text-stone-500 hover:text-red-500"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="flex gap-3">
                       <Button type="submit" variant="sand" disabled={tipLoading}>{tipLoading ? "Sparar..." : "Spara tips"}</Button>
                       <Button type="button" variant="ghost" onClick={() => setShowTipForm(false)}>Avbryt</Button>
