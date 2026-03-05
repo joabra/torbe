@@ -1,6 +1,7 @@
 import { BookingCalendar } from "@/components/BookingCalendar";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { FlightInfo } from "@/components/FlightInfo";
 
 export const metadata = {
   title: "Kalender — Torbe",
@@ -17,6 +18,7 @@ export default function KalenderPage() {
           <p className="mt-3 text-stone-500">
             Röda datum är bokade. Lediga datum kan du boka nedan.
           </p>
+          <FlightInfo />
         </div>
 
         <BookingCalendar />
