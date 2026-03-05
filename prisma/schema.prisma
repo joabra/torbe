@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  password  String
+  role      Role      @default(USER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  bookings  Booking[]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model Booking {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkIn   DateTime
+  checkOut  DateTime
+  guests    Int
+  message   String?
+  adminNote String?
+  status    BookingStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Tip {
+  id          String      @id @default(cuid())
+  category    TipCategory
+  title       String
+  description String
+  address     String?
+  website     String?
+  imageUrl    String?
+  mapUrl      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+enum TipCategory {
+  RESTAURANT
+  EXCURSION
+  MARKET
+  EVENT
+  OTHER
+}
+
+model ApartmentInfo {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  maxGuests   Int      @default(8)
+  features    Json     @default("[]")
+  images      Json     @default("[]")
+  updatedAt   DateTime @updatedAt
+}

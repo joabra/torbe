@@ -1,0 +1,41 @@
+name: CI — Bygg & test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Bygg & typkontroll
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Hämta kod
+        uses: actions/checkout@v4
+
+      - name: Sätt upp Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Installera beroenden
+        run: npm ci --legacy-peer-deps
+
+      - name: Generera Prisma-klient
+        run: npx prisma generate
+        env:
+          # Dummy-URL krävs för att Prisma ska kunna generera klienten utan riktig DB
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/torbe"
+
+      - name: Typkontroll
+        run: npx tsc --noEmit
+
+      - name: Bygg produktionsversion
+        run: npm run build
+        env:
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/torbe"
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          NEXTAUTH_URL: "http://localhost:3000"

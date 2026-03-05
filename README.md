@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Torbe — Familjens semesterbokningssida
 
-## Getting Started
+En bokningssajt för Torbe-familjens lägenhet i Spanien. Byggd med Next.js, Prisma och PostgreSQL.
 
-First, run the development server:
+## Kom igång lokalt
+
+Förutsättningar: Node.js 20+ och en PostgreSQL-databas.
 
 ```bash
+git clone https://github.com/joabra/torbe.git
+cd torbe
+npm install --legacy-peer-deps
+cp .env.example .env        # fyll i dina värden
+npx prisma generate
+npx prisma migrate dev --name init
+npx tsx prisma/seed.ts      # skapar admin@torbe.se / admin123
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Öppna http://localhost:3000 i webbläsaren.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Gratis hosting (rekommenderat)
 
-## Learn More
+### Databas — Neon (gratis PostgreSQL)
+1. Skapa konto på https://neon.tech
+2. Skapa ett nytt projekt och kopiera connection string
+3. Klistra in som `DATABASE_URL` i Vercel och i `.env`
 
-To learn more about Next.js, take a look at the following resources:
+### App-hosting — Vercel (gratis)
+1. Skapa konto på https://vercel.com
+2. Importera detta GitHub-repo
+3. Lägg till miljövariablerna nedan i Vercel-dashboarden
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## GitHub Actions
 
-## Deploy on Vercel
+Workflowsen i `.github/workflows/` kräver följande Secrets i GitHub
+(Settings → Secrets and variables → Actions):
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Secret | Beskrivning |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (från Neon) |
+| `NEXTAUTH_SECRET` | Hemlig nyckel — kör `npx auth secret` lokalt |
+| `NEXTAUTH_URL` | Din publika URL, t.ex. `https://torbe.vercel.app` |
+| `VERCEL_TOKEN` | API-token från vercel.com/account/tokens |
+| `VERCEL_ORG_ID` | Från `.vercel/project.json` efter `vercel link` |
+| `VERCEL_PROJECT_ID` | Från `.vercel/project.json` efter `vercel link` |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Hämta Vercel IDs lokalt:
+```bash
+npm install -g vercel
+vercel login
+vercel link
+cat .vercel/project.json
+```
+
+---
+
+## Teknikstack
+
+- **Next.js 16** — App Router, React Server Components
+- **Tailwind CSS v4** — Anpassade designtokens (forest/sand)
+- **Auth.js v5** — JWT-autentisering med e-post + lösenord
+- **Prisma 7** — ORM med PostgreSQL-adapter
+- **Neon** — Gratis serverless PostgreSQL
+- **Vercel** — Gratis hosting för Next.js

@@ -1,22 +1,45 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  /* Forest greens */
+  --color-forest-50:  #f2f7f2;
+  --color-forest-100: #e2eee2;
+  --color-forest-200: #c4ddc4;
+  --color-forest-700: #2d6a3f;
+  --color-forest-800: #1f4e2d;
+  --color-forest-900: #143320;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* Sand / gold accent */
+  --color-sand-100:  #fdf6e3;
+  --color-sand-300:  #f5d98a;
+  --color-sand-400:  #e8c55a;
+  --color-sand-500:  #d4a827;
+
+  /* Base */
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Calendar overrides */
+.rdp {
+  --rdp-accent-color: var(--color-sand-400);
+  --rdp-background-color: var(--color-sand-100);
 }
 
 body {

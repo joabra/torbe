@@ -1,0 +1,312 @@
+"use client";
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { Check, X, Trash2, Users, CalendarDays, MessageSquare, Plus, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Input, Textarea } from "@/components/ui/Input";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { formatDateShort, statusLabel, categoryLabel } from "@/lib/utils";
+
+interface Booking {
+  id: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  message?: string;
+  adminNote?: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+  user: { id: string; name: string; email: string };
+}
+
+interface Tip {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+  address?: string;
+  website?: string;
+}
+
+const statusVariant = { PENDING: "pending" as const, APPROVED: "approved" as const, REJECTED: "rejected" as const };
+
+const categoryIcons: Record<string, React.ReactNode> = {
+  RESTAURANT: <UtensilsCrossed className="w-4 h-4" />,
+  EXCURSION: <Map className="w-4 h-4" />,
+  MARKET: <ShoppingBag className="w-4 h-4" />,
+  EVENT: <PartyPopper className="w-4 h-4" />,
+  OTHER: <MoreHorizontal className="w-4 h-4" />,
+};
+
+export default function AdminPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const role = (session?.user as { role?: string })?.role;
+
+  const [tab, setTab] = useState<"bookings" | "tips">("bookings");
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [tips, setTips] = useState<Tip[]>([]);
+  const [adminNote, setAdminNote] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
+  // New tip form
+  const [showTipForm, setShowTipForm] = useState(false);
+  const [tipForm, setTipForm] = useState({
+    category: "RESTAURANT", title: "", description: "", address: "", website: "",
+  });
+  const [tipLoading, setTipLoading] = useState(false);
+
+  useEffect(() => {
+    if (status === "unauthenticated" || (status === "authenticated" && role !== "ADMIN")) {
+      router.push("/");
+    }
+    if (status === "authenticated" && role === "ADMIN") {
+      Promise.all([
+        fetch("/api/admin/bookings").then((r) => r.json()),
+        fetch("/api/tips").then((r) => r.json()),
+      ]).then(([b, t]) => {
+        setBookings(b);
+        setTips(t);
+      }).finally(() => setLoading(false));
+    }
+  }, [status, role, router]);
+
+  async function handleBookingAction(id: string, action: "APPROVED" | "REJECTED") {
+    const note = adminNote[id] ?? "";
+    const res = await fetch(`/api/bookings/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: action, adminNote: note }),
+    });
+    if (res.ok) {
+      setBookings((prev) => prev.map((b) => b.id === id ? { ...b, status: action, adminNote: note } : b));
+    } else {
+      const data = await res.json();
+      alert(data.error);
+    }
+  }
+
+  async function handleDeleteBooking(id: string) {
+    if (!confirm("Är du säker på att du vill ta bort denna bokning?")) return;
+    const res = await fetch(`/api/bookings/${id}`, { method: "DELETE" });
+    if (res.ok) setBookings((prev) => prev.filter((b) => b.id !== id));
+  }
+
+  async function handleAddTip(e: React.FormEvent) {
+    e.preventDefault();
+    setTipLoading(true);
+    const res = await fetch("/api/tips", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(tipForm),
+    });
+    if (res.ok) {
+      const newTip = await res.json();
+      setTips((prev) => [newTip, ...prev]);
+      setTipForm({ category: "RESTAURANT", title: "", description: "", address: "", website: "" });
+      setShowTipForm(false);
+    }
+    setTipLoading(false);
+  }
+
+  async function handleDeleteTip(id: string) {
+    if (!confirm("Ta bort detta tips?")) return;
+    const res = await fetch(`/api/tips/${id}`, { method: "DELETE" });
+    if (res.ok) setTips((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  if (status === "loading" || loading) {
+    return (
+      <div className="pt-28 min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-sand-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const pending = bookings.filter((b) => b.status === "PENDING");
+
+  return (
+    <div className="pt-28 pb-20 min-h-screen bg-stone-50 px-6">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8">
+          <span className="text-sand-500 text-sm font-semibold uppercase tracking-widest">Administration</span>
+          <h1 className="mt-3 text-4xl font-bold text-forest-900">Admin-panel</h1>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          {[
+            { label: "Väntande", value: pending.length, color: "bg-amber-50 text-amber-700" },
+            { label: "Godkända", value: bookings.filter((b) => b.status === "APPROVED").length, color: "bg-emerald-50 text-emerald-700" },
+            { label: "Tips", value: tips.length, color: "bg-forest-50 text-forest-700" },
+          ].map((s) => (
+            <div key={s.label} className={`${s.color} rounded-2xl p-4 text-center`}>
+              <p className="text-3xl font-bold">{s.value}</p>
+              <p className="text-sm font-medium mt-1">{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6">
+          {(["bookings", "tips"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${tab === t ? "bg-forest-800 text-white" : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200"}`}
+            >
+              {t === "bookings" ? `Bokningar (${pending.length} väntande)` : "Tips & aktiviteter"}
+            </button>
+          ))}
+        </div>
+
+        {/* Bookings tab */}
+        {tab === "bookings" && (
+          <div className="flex flex-col gap-4">
+            {bookings.length === 0 && (
+              <Card><CardBody className="text-center py-12 text-stone-400">Inga bokningar än</CardBody></Card>
+            )}
+            {bookings.map((booking) => (
+              <Card key={booking.id}>
+                <CardHeader className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 font-semibold text-forest-800">
+                      <CalendarDays className="w-4 h-4 text-sand-500" />
+                      {formatDateShort(booking.checkIn)} → {formatDateShort(booking.checkOut)}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-sm text-stone-500">
+                      <span className="font-medium text-stone-700">{booking.user.name}</span>
+                      <span>{booking.user.email}</span>
+                      <span className="flex items-center gap-1"><Users className="w-3 h-3" />{booking.guests}</span>
+                    </div>
+                  </div>
+                  <Badge variant={statusVariant[booking.status]}>{statusLabel(booking.status)}</Badge>
+                </CardHeader>
+                <CardBody>
+                  {booking.message && (
+                    <div className="flex gap-2 bg-stone-50 rounded-xl p-3 text-sm text-stone-600 mb-4">
+                      <MessageSquare className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
+                      {booking.message}
+                    </div>
+                  )}
+
+                  {booking.status === "PENDING" && (
+                    <div className="flex flex-col gap-3">
+                      <Input
+                        placeholder="Admin-anteckning (visas för användaren)"
+                        value={adminNote[booking.id] ?? ""}
+                        onChange={(e) => setAdminNote((prev) => ({ ...prev, [booking.id]: e.target.value }))}
+                      />
+                      <div className="flex gap-3">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => handleBookingAction(booking.id, "APPROVED")}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                        >
+                          <Check className="w-4 h-4" />
+                          Godkänn
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleBookingAction(booking.id, "REJECTED")}
+                          className="flex-1"
+                        >
+                          <X className="w-4 h-4" />
+                          Avslå
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {booking.adminNote && booking.status !== "PENDING" && (
+                    <p className="text-sm text-stone-500 italic">Anteckning: {booking.adminNote}</p>
+                  )}
+
+                  <div className="mt-3 flex justify-end">
+                    <button onClick={() => handleDeleteBooking(booking.id)} className="text-stone-300 hover:text-red-500 transition-colors p-1">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </CardBody>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Tips tab */}
+        {tab === "tips" && (
+          <div>
+            <div className="flex justify-end mb-4">
+              <Button variant="sand" size="sm" onClick={() => setShowTipForm(!showTipForm)}>
+                <Plus className="w-4 h-4" />
+                Lägg till tips
+              </Button>
+            </div>
+
+            {showTipForm && (
+              <Card className="mb-6">
+                <CardHeader><p className="font-semibold text-forest-800">Nytt tips</p></CardHeader>
+                <CardBody>
+                  <form onSubmit={handleAddTip} className="flex flex-col gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-forest-800 block mb-1">Kategori</label>
+                      <select
+                        value={tipForm.category}
+                        onChange={(e) => setTipForm((p) => ({ ...p, category: e.target.value }))}
+                        className="w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sand-400"
+                      >
+                        {["RESTAURANT", "EXCURSION", "MARKET", "EVENT", "OTHER"].map((c) => (
+                          <option key={c} value={c}>{categoryLabel(c)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <Input label="Titel" required value={tipForm.title} onChange={(e) => setTipForm((p) => ({ ...p, title: e.target.value }))} />
+                    <Textarea label="Beskrivning" required value={tipForm.description} onChange={(e) => setTipForm((p) => ({ ...p, description: e.target.value }))} />
+                    <Input label="Adress" value={tipForm.address} onChange={(e) => setTipForm((p) => ({ ...p, address: e.target.value }))} />
+                    <Input label="Webbplats (URL)" type="url" value={tipForm.website} onChange={(e) => setTipForm((p) => ({ ...p, website: e.target.value }))} />
+                    <div className="flex gap-3">
+                      <Button type="submit" variant="sand" disabled={tipLoading}>{tipLoading ? "Sparar..." : "Spara tips"}</Button>
+                      <Button type="button" variant="ghost" onClick={() => setShowTipForm(false)}>Avbryt</Button>
+                    </div>
+                  </form>
+                </CardBody>
+              </Card>
+            )}
+
+            <div className="flex flex-col gap-3">
+              {tips.map((tip) => (
+                <Card key={tip.id}>
+                  <CardBody className="flex items-start justify-between gap-4">
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-forest-100 text-forest-700 flex items-center justify-center shrink-0">
+                        {categoryIcons[tip.category]}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-forest-800">{tip.title}</p>
+                          <Badge variant="category">{categoryLabel(tip.category)}</Badge>
+                        </div>
+                        <p className="text-sm text-stone-500 mt-0.5 line-clamp-2">{tip.description}</p>
+                        {tip.address && <p className="text-xs text-stone-400 mt-1">📍 {tip.address}</p>}
+                      </div>
+                    </div>
+                    <button onClick={() => handleDeleteTip(tip.id)} className="text-stone-300 hover:text-red-500 transition-colors p-1 shrink-0">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </CardBody>
+                </Card>
+              ))}
+              {tips.length === 0 && (
+                <Card><CardBody className="text-center py-12 text-stone-400">Inga tips tillagda än</CardBody></Card>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
