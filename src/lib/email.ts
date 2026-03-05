@@ -1,20 +1,24 @@
 import nodemailer from "nodemailer";
 
+const emailPort = Number(process.env.EMAIL_PORT ?? 587);
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_SERVER_HOST,
-  port: Number(process.env.EMAIL_SERVER_PORT ?? 587),
-  secure: false,
+  host: process.env.EMAIL_HOST,
+  port: emailPort,
+  secure: emailPort === 465,
   auth:
-    process.env.EMAIL_SERVER_USER
+    process.env.EMAIL_USER
       ? {
-          user: process.env.EMAIL_SERVER_USER,
-          pass: process.env.EMAIL_SERVER_PASSWORD,
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
         }
       : undefined,
 });
 
 const FROM = process.env.EMAIL_FROM ?? "noreply@torbe.se";
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "";
+const ADMIN_EMAILS = (process.env.ADMIN_EMAIL ?? "")
+  .split(",")
+  .map((e) => e.trim())
+  .filter(Boolean);
 const BASE_URL = process.env.NEXTAUTH_URL ?? "https://torbe.vercel.app";
 
 function wrap(title: string, body: string) {
@@ -30,19 +34,23 @@ a.btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#8b7355;
 }
 
 async function send(to: string, subject: string, html: string) {
-  if (!to || !process.env.EMAIL_SERVER_HOST) return;
+  if (!to || !process.env.EMAIL_HOST) {
+    console.warn(`E-post ej skickad till "${to}" – EMAIL_HOST saknas`);
+    return;
+  }
   try {
     await transporter.sendMail({ from: FROM, to, subject, html });
+    console.log(`E-post skickad: ${subject} → ${to}`);
   } catch (err) {
-    console.error("E-postfel:", err);
+    console.error(`E-postfel (till: ${to}, ämne: ${subject}):`, err);
   }
 }
 
 /** Admin: ny användare väntar på godkännande */
 export async function emailAdminNewUser(user: { name: string; email: string }) {
-  if (!ADMIN_EMAIL) return;
+  if (ADMIN_EMAILS.length === 0) return;
   await send(
-    ADMIN_EMAIL,
+    ADMIN_EMAILS.join(","),
     `Ny registrering väntar godkännande – ${user.name}`,
     wrap(
       "Ny användare väntar på godkännande",
@@ -85,10 +93,10 @@ export async function emailAdminNewBooking(
   booking: { checkIn: Date; checkOut: Date; guests: number; message?: string | null },
   user: { name: string; email: string }
 ) {
-  if (!ADMIN_EMAIL) return;
+  if (ADMIN_EMAILS.length === 0) return;
   const fmt = (d: Date) => d.toLocaleDateString("sv-SE");
   await send(
-    ADMIN_EMAIL,
+    ADMIN_EMAILS.join(","),
     `Ny bokningsbegäran: ${fmt(booking.checkIn)} – ${fmt(booking.checkOut)}`,
     wrap(
       "Ny bokningsbegäran",

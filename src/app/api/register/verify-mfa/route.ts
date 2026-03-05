@@ -42,8 +42,8 @@ export async function POST(req: NextRequest) {
       data: { mfaEnabled: true },
     });
 
-    // Notifiera admin och bekräfta för användaren (fire-and-forget)
-    void Promise.all([
+    // Notifiera admin och bekräfta för användaren
+    await Promise.all([
       emailAdminNewUser({ name: updated.name, email: updated.email }),
       emailUserAwaitingApproval({ name: updated.name, email: updated.email }),
     ]);

@@ -8,6 +8,7 @@ interface Booking {
   id: string;
   checkIn: string;
   checkOut: string;
+  status?: string;
   guestName?: string | null;
   user?: { name: string } | null;
 }
@@ -132,9 +133,10 @@ export function BookingCalendar() {
           if (!date) return <div key={`empty-${idx}`} />;
           const past = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
           const booking = getBookingForDate(date, bookings);
-          const booked = !!booking;
+          const booked = booking?.status === "APPROVED";
+          const pending = booking?.status === "PENDING";
           const isToday = isSameDay(date, today);
-          const firstName = booked ? firstNameOf(booking!) : "";
+          const firstName = booking ? firstNameOf(booking) : "";
           const { outbound: flightOut, ret: flightRet } = session ? getFlightsForDate(date, flights) : {};
 
           return (
@@ -143,14 +145,18 @@ export function BookingCalendar() {
               className={cn(
                 "aspect-square flex flex-col items-center justify-start pt-1 rounded-xl text-sm font-medium transition-colors",
                 past && "text-stone-300",
-                !past && !booked && "text-forest-900 hover:bg-forest-50 cursor-default",
+                !past && !booked && !pending && "text-forest-900 hover:bg-forest-50 cursor-default",
                 booked && "bg-red-100 text-red-700 font-semibold",
-                isToday && !booked && "ring-2 ring-sand-400 ring-offset-1"
+                pending && "bg-amber-50 text-amber-700 font-semibold ring-1 ring-amber-300",
+                isToday && !booked && !pending && "ring-2 ring-sand-400 ring-offset-1"
               )}
             >
-              <span className={cn(booked && firstName ? "leading-none" : "")}>{date.getDate()}</span>
-              {booked && firstName && (
+              <span className={cn((booked || pending) && firstName ? "leading-none" : "")}>{date.getDate()}</span>
+              {(booked || pending) && firstName && (
                 <span className="text-[8px] leading-none mt-0.5 font-normal truncate max-w-full px-0.5">{firstName}</span>
+              )}
+              {pending && (
+                <span className="text-[7px] leading-none mt-0.5 font-semibold px-1">väntar</span>
               )}
               {flightOut && (
                 <a
@@ -187,6 +193,12 @@ export function BookingCalendar() {
           <div className="w-3 h-3 rounded-full bg-red-100 border border-red-300" />
           <span className="text-xs text-stone-500">Bokad</span>
         </div>
+        {session && (
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-amber-50 border border-amber-300" />
+            <span className="text-xs text-stone-500">Väntar godkännande</span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-white border-2 border-sand-400" />
           <span className="text-xs text-stone-500">Idag</span>

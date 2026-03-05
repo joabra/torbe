@@ -12,7 +12,19 @@ const schema = z.object({
 });
 
 export async function GET() {
-  // Return all approved bookings (public – for calendar)
+  const session = await auth();
+  const authed = !!session?.user;
+
+  if (authed) {
+    // Inloggad: returnera både godkända och väntande bokningar
+    const bookings = await prisma.booking.findMany({
+      where: { status: { in: ["APPROVED", "PENDING"] } },
+      select: { checkIn: true, checkOut: true, id: true, guestName: true, status: true, user: { select: { name: true } } },
+    });
+    return NextResponse.json(bookings);
+  }
+
+  // Ej inloggad: bara godkända
   const bookings = await prisma.booking.findMany({
     where: { status: "APPROVED" },
     select: { checkIn: true, checkOut: true, id: true, guestName: true, user: { select: { name: true } } },

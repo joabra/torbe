@@ -1,16 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Leaf, AlertCircle, ShieldCheck, Copy, Check } from "lucide-react";
+import { Leaf, AlertCircle, ShieldCheck, Copy, Check, Clock } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardBody } from "@/components/ui/Card";
 
 export default function RegistreraPage() {
-  const router = useRouter();
-
   // Steg 1: Kontouppgifter
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -18,7 +14,7 @@ export default function RegistreraPage() {
   const [confirm, setConfirm] = useState("");
 
   // Steg 2: MFA-setup
-  const [step, setStep] = useState<"form" | "mfa">("form");
+  const [step, setStep] = useState<"form" | "mfa" | "pending">("form");
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [mfaSecret, setMfaSecret] = useState("");
   const [mfaCode, setMfaCode] = useState("");
@@ -74,10 +70,7 @@ export default function RegistreraPage() {
 
     if (!res.ok) { setError(data.error ?? "Ogiltig kod"); return; }
 
-    // Inloggning med email+lösenord+mfaCode
-    await signIn("credentials", { email, password, mfaCode: mfaCode.replace(/\s/g, ""), redirect: false });
-    router.push("/");
-    router.refresh();
+    setStep("pending");
   }
 
   function copySecret() {
@@ -102,15 +95,43 @@ export default function RegistreraPage() {
             </>
           ) : (
             <>
-              <h1 className="mt-4 text-3xl font-bold text-forest-900">Aktivera MFA</h1>
-              <p className="mt-2 text-stone-500 text-sm">Skanna QR-koden med din autentiseringsapp</p>
+              <h1 className="mt-4 text-3xl font-bold text-forest-900">
+                {step === "mfa" ? "Aktivera MFA" : "Konto skapat!"}
+              </h1>
+              <p className="mt-2 text-stone-500 text-sm">
+                {step === "mfa" ? "Skanna QR-koden med din autentiseringsapp" : "Vi granskar ditt konto"}
+              </p>
             </>
           )}
         </div>
 
         <Card>
           <CardBody>
-            {step === "form" ? (
+            {step === "pending" ? (
+              <div className="flex flex-col items-center gap-5 py-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-sand-50 border-2 border-sand-300 flex items-center justify-center">
+                  <Clock className="w-8 h-8 text-sand-500" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-forest-900">Väntar på godkännande</h2>
+                  <p className="mt-2 text-stone-500 text-sm leading-relaxed">
+                    Ditt konto har skapats och en administratör har fått en notis.
+                    Du får ett e-postmeddelande till <strong>{email}</strong> så fort kontot är godkänt.
+                  </p>
+                </div>
+                <div className="w-full bg-forest-50 rounded-xl px-4 py-3 text-sm text-forest-700 text-left">
+                  <strong>Vad händer nu?</strong>
+                  <ol className="mt-2 space-y-1 list-decimal list-inside">
+                    <li>Admin granskar din registrering</li>
+                    <li>Du får ett bekräftelsemejl när kontot godkänts</li>
+                    <li>Därefter kan du logga in</li>
+                  </ol>
+                </div>
+                <Link href="/logga-in" className="text-forest-700 font-semibold text-sm hover:underline">
+                  Gå till inloggning
+                </Link>
+              </div>
+            ) : step === "form" ? (
               <form onSubmit={handleRegister} className="flex flex-col gap-4">
                 <Input id="name" label="Ditt namn" type="text" autoComplete="name" required
                   value={name} onChange={(e) => setName(e.target.value)} placeholder="Anna Torbe" />
@@ -183,7 +204,7 @@ export default function RegistreraPage() {
                 )}
 
                 <Button type="submit" variant="sand" size="lg" disabled={loading || mfaCode.length < 6} className="w-full">
-                  {loading ? "Verifierar..." : "Aktivera MFA & logga in"}
+                  {loading ? "Verifierar..." : "Aktivera MFA & slutför registrering"}
                 </Button>
               </form>
             )}

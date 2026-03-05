@@ -35,8 +35,8 @@ export function Footer() {
             <ul className="space-y-3 text-sm text-stone-400">
               <li className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-sand-400" />
-                <a href="mailto:kontakt@torbe.se" className="hover:text-sand-400 transition-colors">
-                  kontakt@torbe.se
+                <a href="mailto:Jan.torbe@gmail.com" className="hover:text-sand-400 transition-colors">
+                  Jan.torbe@gmail.com
                 </a>
               </li>
               <li className="flex items-center gap-2">
