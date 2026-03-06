@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Instagram, ExternalLink, RefreshCw } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Instagram, ExternalLink, RefreshCw, Trash2 } from "lucide-react";
 
 interface InstagramPost {
   id: string;
@@ -14,6 +15,14 @@ interface ApiResponse {
   posts: InstagramPost[];
   configured: boolean;
   error?: string;
+}
+
+interface VisitPhoto {
+  id: string;
+  url: string;
+  caption?: string | null;
+  createdAt: string;
+  user?: { name: string } | null;
 }
 
 // Placeholder images when Instagram is not configured
@@ -30,18 +39,35 @@ const placeholderPosts = [
 ];
 
 export default function BilderPage() {
+  const { data: session } = useSession();
+  const userId = (session?.user as { id?: string })?.id;
+  const role = (session?.user as { role?: string })?.role;
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [photos, setPhotos] = useState<VisitPhoto[]>([]);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/instagram");
-    const json = await res.json();
+    const [igRes, photoRes] = await Promise.all([
+      fetch("/api/instagram"),
+      fetch("/api/photos"),
+    ]);
+    const json = await igRes.json();
     setData(json);
+    if (photoRes.ok) setPhotos(await photoRes.json());
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
+
+  async function handleDeletePhoto(id: string) {
+    if (!confirm("Ta bort bilden?")) return;
+    setDeletingPhotoId(id);
+    const res = await fetch(`/api/photos/${id}`, { method: "DELETE" });
+    if (res.ok) setPhotos((prev) => prev.filter((p) => p.id !== id));
+    setDeletingPhotoId(null);
+  }
 
   return (
     <div className="pt-28 pb-20 min-h-screen bg-stone-50 px-6">
@@ -80,6 +106,47 @@ export default function BilderPage() {
             </p>
           </div>
         </div>
+
+        {/* Visit photos from guests */}
+        {photos.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-xl font-bold text-forest-800 mb-4 flex items-center gap-2">
+              📸 Bilder från era vistelser
+            </h2>
+            <div className="columns-2 md:columns-3 gap-4 space-y-4">
+              {photos.map((photo) => (
+                <div key={photo.id} className="relative break-inside-avoid group rounded-2xl overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.url}
+                    alt={photo.caption ?? "Vistelsebild"}
+                    className="w-full h-auto object-cover"
+                  />
+                  {photo.caption && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-3 py-2">
+                      {photo.caption}
+                      {photo.user?.name && <span className="text-white/60 ml-1">— {photo.user.name.split(" ")[0]}</span>}
+                    </div>
+                  )}
+                  {(role === "ADMIN" || photo.user?.name === session?.user?.name) && (
+                    <button
+                      onClick={() => handleDeletePhoto(photo.id)}
+                      disabled={deletingPhotoId === photo.id}
+                      className="absolute top-2 right-2 bg-white/90 backdrop-blur rounded-lg p-1.5 text-red-600 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {session && (
+              <p className="text-xs text-stone-400 text-center mt-4">
+                Ladda upp egna bilder från <a href="/mina-bokningar" className="text-forest-600 hover:underline">Mina bokningar</a>
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Loading */}
         {loading && (

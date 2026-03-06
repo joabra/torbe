@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { emailAdminManualBookingCreated } from "@/lib/email";
 import { z } from "zod";
 
 export async function GET() {
@@ -66,6 +67,15 @@ export async function POST(req: NextRequest) {
   const booking = await prisma.booking.create({
     data: { guestName, checkIn: checkInDate, checkOut: checkOutDate, guests, message, adminNote, status },
     include: { user: { select: { id: true, name: true, email: true } } },
+  });
+
+  // Skicka bekräftelsemail till alla admins
+  await emailAdminManualBookingCreated({
+    checkIn: checkInDate,
+    checkOut: checkOutDate,
+    guests,
+    guestName,
+    adminNote,
   });
 
   return NextResponse.json(booking, { status: 201 });

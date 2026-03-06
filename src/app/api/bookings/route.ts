@@ -74,6 +74,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Dessa datum är redan bokade" }, { status: 409 });
     }
 
+    // Check for overlapping PENDING bookings (warn but don't block)
+    const pendingOverlap = await prisma.booking.findFirst({
+      where: {
+        status: "PENDING",
+        AND: [
+          { checkIn: { lt: checkOutDate } },
+          { checkOut: { gt: checkInDate } },
+        ],
+      },
+      include: { user: { select: { name: true } } },
+    });
+
     const userId = (session.user as { id: string }).id;
     const booking = await prisma.booking.create({
       data: { userId, checkIn: checkInDate, checkOut: checkOutDate, guests, message, status: "PENDING" },
@@ -88,7 +100,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json(booking, { status: 201 });
+    return NextResponse.json(
+      { ...booking, pendingWarning: pendingOverlap ? true : false },
+      { status: 201 }
+    );
   } catch {
     return NextResponse.json({ error: "Serverfel" }, { status: 500 });
   }

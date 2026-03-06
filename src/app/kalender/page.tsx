@@ -1,6 +1,4 @@
 import { BookingCalendar } from "@/components/BookingCalendar";
-import Link from "next/link";
-import { Button } from "@/components/ui/Button";
 import { FlightInfo } from "@/components/FlightInfo";
 
 export const metadata = {
@@ -16,18 +14,12 @@ export default function KalenderPage() {
           <span className="text-sand-500 text-sm font-semibold uppercase tracking-widest">Tillgänglighet</span>
           <h1 className="mt-3 text-4xl font-bold text-forest-900">Bokningskalender</h1>
           <p className="mt-3 text-stone-500">
-            Röda datum är bokade. Lediga datum kan du boka nedan.
+            Klicka på ett inchecks- och utcheckningsdatum för att starta en bokningsförfrågan.
           </p>
           <FlightInfo />
         </div>
 
         <BookingCalendar />
-
-        <div className="mt-8 text-center">
-          <Link href="/boka">
-            <Button variant="sand" size="lg">Boka ett ledigt datum</Button>
-          </Link>
-        </div>
       </div>
     </div>
   );

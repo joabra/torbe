@@ -9,7 +9,7 @@ export async function GET() {
   const userId = (session.user as { id: string }).id;
   const bookings = await prisma.booking.findMany({
     where: { userId },
-    orderBy: { checkIn: "asc" },
+    orderBy: { createdAt: "desc" },
   });
 
   return NextResponse.json(bookings);

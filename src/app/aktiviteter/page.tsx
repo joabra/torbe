@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { MapPin, Globe, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal, Plus, Pencil, Trash2, X } from "lucide-react";
+import { MapPin, Globe, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal, Plus, Pencil, Trash2, X, Heart } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -18,6 +18,8 @@ interface Tip {
   imageUrl?: string;
   mapUrl?: string;
   createdById?: string;
+  voteCount?: number;
+  userVoted?: boolean;
 }
 
 const CATEGORIES = ["RESTAURANT", "EXCURSION", "MARKET", "EVENT", "OTHER"] as const;
@@ -164,6 +166,19 @@ export default function AktiviteterPage() {
     loadTips();
   }
 
+  async function handleVote(tip: Tip) {
+    if (!isLoggedIn) return;
+    // Optimistic update
+    setTips((prev) =>
+      prev.map((t) =>
+        t.id === tip.id
+          ? { ...t, userVoted: !t.userVoted, voteCount: (t.voteCount ?? 0) + (t.userVoted ? -1 : 1) }
+          : t
+      )
+    );
+    await fetch(`/api/tips/${tip.id}/vote`, { method: "POST" });
+  }
+
   function canEdit(tip: Tip) {
     if (!isLoggedIn) return false;
     return role === "ADMIN" || tip.createdById === userId;
@@ -300,6 +315,26 @@ export default function AktiviteterPage() {
                       </a>
                     )}
                   </div>
+                  {/* Vote button */}
+                  {!tip.id.startsWith("s") && (
+                    <div className="mt-3 pt-3 border-t border-stone-100 flex justify-end">
+                      <button
+                        onClick={() => handleVote(tip)}
+                        disabled={!isLoggedIn}
+                        title={isLoggedIn ? (tip.userVoted ? "Ta bort gillning" : "Gilla detta tips") : "Logga in för att gilla"}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                          tip.userVoted
+                            ? "bg-red-50 text-red-600 border border-red-200"
+                            : isLoggedIn
+                            ? "bg-stone-50 text-stone-400 border border-stone-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
+                            : "bg-stone-50 text-stone-300 border border-stone-200 cursor-default"
+                        }`}
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${tip.userVoted ? "fill-current" : ""}`} />
+                        {tip.voteCount ?? 0}
+                      </button>
+                    </div>
+                  )}
                 </CardBody>
               </Card>
             ))}

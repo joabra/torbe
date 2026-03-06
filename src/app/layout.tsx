@@ -20,6 +20,26 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Torbe — Familjens plats i solen",
   description: "Boka familjens lägenhet i Spanien. Se lediga datum, aktiviteter och bildgalleri.",
+  openGraph: {
+    title: "Torbe — Familjens plats i solen",
+    description: "Boka familjens lägenhet i Spanien. Se lediga datum, aktiviteter och bildgalleri.",
+    url: "https://torbe.vercel.app",
+    siteName: "Torbe",
+    images: [
+      {
+        url: "/hero.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Familjens lägenhet i Mil Palmeras, Costa Blanca",
+      },
+    ],
+    locale: "sv_SE",
+    type: "website",
+  },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({

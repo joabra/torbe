@@ -19,19 +19,28 @@ export default function KontoinstellningarPage() {
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState(false);
 
-  // MFA
-  const [mfaStep, setMfaStep] = useState<"idle" | "setup" | "confirm">("idle");
+  // MFA state
+  const [mfaEnabled, setMfaEnabled] = useState<boolean | null>(null);
+  const [mfaStep, setMfaStep] = useState<"idle" | "setup" | "confirm" | "disable">("idle");
   const [mfaSecret, setMfaSecret] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [mfaLoading, setMfaLoading] = useState(false);
   const [mfaError, setMfaError] = useState("");
-  const [mfaSuccess, setMfaSuccess] = useState(false);
+  const [mfaSuccess, setMfaSuccess] = useState("");
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/logga-in");
   }, [status, router]);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetch("/api/account/me")
+        .then((r) => r.json())
+        .then((data) => setMfaEnabled(data.mfaEnabled ?? false));
+    }
+  }, [status]);
 
   useEffect(() => {
     if (!mfaSecret || !session?.user?.email) return;
@@ -83,11 +92,30 @@ export default function KontoinstellningarPage() {
     const data = await res.json();
     setMfaLoading(false);
     if (!res.ok) { setMfaError(data.error ?? "Felaktig kod"); return; }
-    setMfaSuccess(true);
+    setMfaEnabled(true);
+    setMfaSuccess("MFA är nu aktiverat på ditt konto!");
     setMfaStep("idle");
     setMfaCode("");
     setMfaSecret("");
     setQrDataUrl("");
+  }
+
+  async function disableMfa(e: React.FormEvent) {
+    e.preventDefault();
+    setMfaError("");
+    setMfaLoading(true);
+    const res = await fetch("/api/account/mfa/disable", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: mfaCode }),
+    });
+    const data = await res.json();
+    setMfaLoading(false);
+    if (!res.ok) { setMfaError(data.error ?? "Felaktig kod"); return; }
+    setMfaEnabled(false);
+    setMfaSuccess("MFA har inaktiverats.");
+    setMfaStep("idle");
+    setMfaCode("");
   }
 
   function copySecret() {
@@ -174,15 +202,22 @@ export default function KontoinstellningarPage() {
         {/* ── MFA ── */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2 text-forest-900 font-semibold">
-              <ShieldCheck className="w-4 h-4 text-sand-500" />
-              Tvåstegsverifiering (MFA)
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-forest-900 font-semibold">
+                <ShieldCheck className="w-4 h-4 text-sand-500" />
+                Tvåstegsverifiering (MFA)
+              </div>
+              {mfaEnabled !== null && (
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${mfaEnabled ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+                  {mfaEnabled ? "Aktivt" : "Inaktivt"}
+                </span>
+              )}
             </div>
           </CardHeader>
           <CardBody>
             {mfaSuccess && (
               <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 rounded-xl px-4 py-3 text-sm mb-4">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />MFA är nu aktiverat på ditt konto!
+                <CheckCircle2 className="w-4 h-4 shrink-0" />{mfaSuccess}
               </div>
             )}
 
@@ -196,10 +231,22 @@ export default function KontoinstellningarPage() {
                     <AlertCircle className="w-4 h-4 shrink-0" />{mfaError}
                   </div>
                 )}
-                <Button variant="outline" onClick={startMfaSetup} disabled={mfaLoading}>
-                  <ShieldOff className="w-4 h-4" />
-                  {mfaLoading ? "Förbereder..." : "Sätt upp MFA / byt autentiserare"}
-                </Button>
+                <div className="flex gap-3">
+                  <Button variant="outline" onClick={startMfaSetup} disabled={mfaLoading} className="flex-1">
+                    <ShieldOff className="w-4 h-4" />
+                    {mfaLoading ? "Förbereder..." : mfaEnabled ? "Byt autentiserare" : "Sätt upp MFA"}
+                  </Button>
+                  {mfaEnabled && (
+                    <Button
+                      variant="danger"
+                      onClick={() => { setMfaStep("disable"); setMfaCode(""); setMfaError(""); }}
+                      className="flex-1"
+                    >
+                      <ShieldOff className="w-4 h-4" />
+                      Inaktivera MFA
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -250,6 +297,41 @@ export default function KontoinstellningarPage() {
                     </Button>
                     <Button type="submit" variant="sand" disabled={mfaLoading || mfaCode.length < 6} className="flex-1">
                       {mfaLoading ? "Verifierar..." : "Aktivera MFA"}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {mfaStep === "disable" && (
+              <div className="flex flex-col gap-4">
+                <div className="bg-amber-50 rounded-xl px-4 py-3 text-sm text-amber-700">
+                  Ange din nuvarande engångskod för att bekräfta att du vill inaktivera MFA.
+                </div>
+                <form onSubmit={disableMfa} className="flex flex-col gap-3">
+                  <Input
+                    id="mfa-disable-code"
+                    label="6-siffrig kod från appen"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    required
+                    maxLength={6}
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="123456"
+                  />
+                  {mfaError && (
+                    <div className="flex items-center gap-2 bg-red-50 text-red-700 rounded-xl px-4 py-3 text-sm">
+                      <AlertCircle className="w-4 h-4 shrink-0" />{mfaError}
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <Button type="button" variant="ghost" onClick={() => { setMfaStep("idle"); setMfaCode(""); }} className="flex-1">
+                      Avbryt
+                    </Button>
+                    <Button type="submit" variant="danger" disabled={mfaLoading || mfaCode.length < 6} className="flex-1">
+                      {mfaLoading ? "Inaktiverar..." : "Inaktivera MFA"}
                     </Button>
                   </div>
                 </form>

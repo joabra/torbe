@@ -7,18 +7,32 @@ datasource db {
 }
 
 model User {
-  id         String    @id @default(cuid())
-  name       String
-  email      String    @unique
-  password   String
-  role       Role      @default(USER)
-  approved   Boolean   @default(true)
-  mfaSecret  String?
-  mfaEnabled Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  bookings   Booking[]
-  tips       Tip[]
+  id               String           @id @default(cuid())
+  name             String
+  email            String           @unique
+  password         String
+  role             Role             @default(USER)
+  approved         Boolean          @default(true)
+  mfaSecret        String?
+  mfaEnabled       Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  bookings         Booking[]
+  tips             Tip[]
+  guestbookEntries GuestbookEntry[]
+  tipVotes         TipVote[]
+  bookingMessages  BookingMessage[]
+  visitPhotos      VisitPhoto[]
+}
+
+model GuestbookEntry {
+  id        String   @id @default(cuid())
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  content   String
+  imageUrl  String?
+  visitYear Int?
+  createdAt DateTime @default(now())
 }
 
 enum Role {
@@ -27,18 +41,20 @@ enum Role {
 }
 
 model Booking {
-  id        String        @id @default(cuid())
+  id        String           @id @default(cuid())
   userId    String?
-  user      User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   guestName String?
   checkIn   DateTime
   checkOut  DateTime
   guests    Int
   message   String?
   adminNote String?
-  status    BookingStatus @default(PENDING)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  status    BookingStatus    @default(PENDING)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  messages  BookingMessage[]
+  photos    VisitPhoto[]
 }
 
 enum BookingStatus {
@@ -60,6 +76,7 @@ model Tip {
   createdBy   User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  votes       TipVote[]
 }
 
 enum TipCategory {
@@ -77,5 +94,39 @@ model ApartmentInfo {
   maxGuests   Int      @default(8)
   features    Json     @default("[]")
   images      Json     @default("[]")
+  arrivalInfo Json     @default("{}")
   updatedAt   DateTime @updatedAt
+}
+
+model TipVote {
+  id        String   @id @default(cuid())
+  tipId     String
+  tip       Tip      @relation(fields: [tipId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([tipId, userId])
+}
+
+model BookingMessage {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  content   String
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model VisitPhoto {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  url       String
+  caption   String?
+  createdAt DateTime @default(now())
 }

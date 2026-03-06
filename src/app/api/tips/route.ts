@@ -14,8 +14,39 @@ const schema = z.object({
 });
 
 export async function GET() {
-  const tips = await prisma.tip.findMany({ orderBy: { createdAt: "desc" } });
-  return NextResponse.json(tips);
+  try {
+    const session = await auth();
+    const userId = session?.user ? (session.user as { id: string }).id : null;
+
+    const tips = await prisma.tip.findMany({ orderBy: { createdAt: "desc" } });
+
+    let countMap: Record<string, number> = {};
+    let votedSet = new Set<string>();
+
+    try {
+      const allVotes = await prisma.tipVote.findMany({ select: { tipId: true, userId: true } });
+      for (const v of allVotes) {
+        countMap[v.tipId] = (countMap[v.tipId] ?? 0) + 1;
+      }
+      if (userId) {
+        const userVotes = allVotes.filter((v) => v.userId === userId);
+        votedSet = new Set(userVotes.map((v) => v.tipId));
+      }
+    } catch {
+      // Votes table may not exist yet — return tips without vote info
+    }
+
+    return NextResponse.json(
+      tips.map((t) => ({
+        ...t,
+        voteCount: countMap[t.id] ?? 0,
+        userVoted: votedSet.has(t.id),
+      }))
+    );
+  } catch (err) {
+    console.error("[tips GET]", err);
+    return NextResponse.json({ error: "Serverfel" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu, X, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
@@ -10,12 +10,24 @@ const navLinks = [
   { href: "/kalender", label: "Kalender" },
   { href: "/aktiviteter", label: "Aktiviteter" },
   { href: "/bilder", label: "Bilder" },
+  { href: "/gastbok", label: "Gästbok" },
 ];
 
 export function Navbar() {
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const role = (session?.user as { role?: string })?.role;
+
+  useEffect(() => {
+    if (!session) { setPendingCount(0); return; }
+    fetch("/api/bookings/mine")
+      .then((r) => r.ok ? r.json() : [])
+      .then((bookings: { status: string }[]) => {
+        setPendingCount(bookings.filter((b) => b.status === "PENDING").length);
+      })
+      .catch(() => {});
+  }, [session]);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 px-4 pt-4">
@@ -42,9 +54,24 @@ export function Navbar() {
             <li>
               <Link
                 href="/mina-bokningar"
-                className="px-4 py-2 rounded-full text-sm font-medium text-stone-600 hover:text-forest-800 hover:bg-forest-50 transition-colors"
+                className="relative px-4 py-2 rounded-full text-sm font-medium text-stone-600 hover:text-forest-800 hover:bg-forest-50 transition-colors"
               >
                 Mina bokningar
+                {pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {pendingCount}
+                  </span>
+                )}
+              </Link>
+            </li>
+          )}
+          {session && (
+            <li>
+              <Link
+                href="/anlanding"
+                className="px-4 py-2 rounded-full text-sm font-medium text-stone-600 hover:text-forest-800 hover:bg-forest-50 transition-colors"
+              >
+                Anländning
               </Link>
             </li>
           )}
@@ -113,8 +140,16 @@ export function Navbar() {
           ))}
           {session && (
             <>
-              <Link href="/mina-bokningar" onClick={() => setOpen(false)} className="px-4 py-3 rounded-xl text-sm font-medium text-stone-700 hover:bg-forest-50">
+              <Link href="/mina-bokningar" onClick={() => setOpen(false)} className="relative px-4 py-3 rounded-xl text-sm font-medium text-stone-700 hover:bg-forest-50">
                 Mina bokningar
+                {pendingCount > 0 && (
+                  <span className="ml-2 inline-flex items-center justify-center w-4 h-4 bg-amber-500 text-white text-[10px] font-bold rounded-full">
+                    {pendingCount}
+                  </span>
+                )}
+              </Link>
+              <Link href="/anlanding" onClick={() => setOpen(false)} className="px-4 py-3 rounded-xl text-sm font-medium text-stone-700 hover:bg-forest-50">
+                Anländning
               </Link>
               <Link href="/konto" onClick={() => setOpen(false)} className="px-4 py-3 rounded-xl text-sm font-medium text-stone-700 hover:bg-forest-50">
                 Kontoinställningar

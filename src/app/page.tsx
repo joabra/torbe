@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { Wifi, PawPrint, Key, Star, MapPin, ChevronDown } from "lucide-react";
+import { Wifi, PawPrint, Key, Star, MapPin, ChevronDown, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { HeroBookingWidget } from "@/components/HeroBookingWidget";
+import { WeatherWidget } from "@/components/WeatherWidget";
+import { prisma } from "@/lib/prisma";
 
 const features = [
   { icon: Wifi, label: "Wi-Fi 100 Mbps" },
@@ -9,7 +11,34 @@ const features = [
   { icon: PawPrint, label: "Husdjursvänlig" },
 ];
 
-export default function HomePage() {
+async function getNextBookingInfo() {
+  const now = new Date();
+  const next = await prisma.booking.findFirst({
+    where: { status: "APPROVED", checkIn: { gte: now } },
+    orderBy: { checkIn: "asc" },
+  });
+  if (!next) return null;
+  const diffMs = next.checkIn.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return { daysUntil: diffDays, checkIn: next.checkIn, checkOut: next.checkOut };
+}
+
+async function getApartmentStats() {
+  const info = await prisma.apartmentInfo.findFirst();
+  if (!info) return { maxGuests: 8, bedrooms: 3, bathrooms: 2, distanceToBeach: "50 m", description: "Vår lägenhet i Mil Palmeras, Pilar de la Horadada — en lugn kustort på Costa Blanca med Blue Flag-strand, kristallklart vatten och 300 soldagar om året. Nära Torre de la Horadada, Torrevieja och Mar Menor. Perfekt för familjeträffar och avkoppling." };
+  const features = info.features as Record<string, string | number>;
+  return {
+    maxGuests: info.maxGuests,
+    bedrooms: Number(features.bedrooms ?? 3),
+    bathrooms: Number(features.bathrooms ?? 2),
+    distanceToBeach: String(features.distanceToBeach ?? "50 m"),
+    description: info.description,
+  };
+}
+
+export default async function HomePage() {
+  const [nextBooking, apt] = await Promise.all([getNextBookingInfo(), getApartmentStats()]);
+
   return (
     <div>
       {/* Hero */}
@@ -31,7 +60,7 @@ export default function HomePage() {
             Familjens lägenhet i Spanien — för avkoppling, äventyr och minnen för livet.
           </p>
 
-          {/* Feature badges */}
+          {/* Feature badges + weather */}
           <div className="flex flex-wrap gap-3 justify-center mt-8">
             {features.map(({ icon: Icon, label }) => (
               <div
@@ -42,7 +71,20 @@ export default function HomePage() {
                 {label}
               </div>
             ))}
+            <WeatherWidget />
           </div>
+
+          {/* Days until next booking */}
+          {nextBooking && (
+            <div className="mt-4 flex items-center gap-2 bg-white/15 backdrop-blur-sm border border-white/20 rounded-full px-5 py-2 text-white text-sm">
+              <CalendarDays className="w-4 h-4 text-sand-400" />
+              {nextBooking.daysUntil === 0
+                ? "Nästa bokning börjar idag!"
+                : nextBooking.daysUntil === 1
+                ? "Nästa bokning börjar imorgon"
+                : `${nextBooking.daysUntil} dagar till nästa bokning`}
+            </div>
+          )}
 
           {/* Rating badge */}
           <div className="absolute right-8 bottom-48 md:right-16 text-right hidden md:block">
@@ -86,16 +128,14 @@ export default function HomePage() {
               Din perfekta bas<br />på solkusten
             </h2>
             <p className="mt-5 text-stone-500 leading-relaxed">
-              Vår lägenhet i Mil Palmeras, Pilar de la Horadada — en lugn kustort på Costa Blanca
-              med Blue Flag-strand, kristallklart vatten och 300 soldagar om året. Nära Torre de
-              la Horadada, Torrevieja och Mar Menor. Perfekt för familjeträffar och avkoppling.
+              {apt.description}
             </p>
             <div className="mt-8 grid grid-cols-2 gap-4">
               {[
-                { label: "Sovrum", value: "3" },
-                { label: "Badrum", value: "2" },
-                { label: "Max gäster", value: "8" },
-                { label: "Till stranden", value: "50 m" },
+                { label: "Sovrum", value: String(apt.bedrooms) },
+                { label: "Badrum", value: String(apt.bathrooms) },
+                { label: "Max gäster", value: String(apt.maxGuests) },
+                { label: "Till stranden", value: apt.distanceToBeach },
               ].map((stat) => (
                 <div key={stat.label} className="bg-forest-50 rounded-2xl p-4 border border-forest-100">
                   <p className="text-2xl font-bold text-forest-800">{stat.value}</p>
@@ -133,11 +173,12 @@ export default function HomePage() {
       <section className="bg-forest-50 py-20 px-6">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-3xl font-bold text-forest-900 text-center mb-12">Allt du behöver</h2>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-4 gap-6">
             {[
               { href: "/kalender", title: "Tillgänglighet", desc: "Se när lägenheten är ledig eller bokad av familjen.", icon: "📅" },
               { href: "/aktiviteter", title: "Aktiviteter & Tips", desc: "Restauranger, utflykter, marknader och event i närheten.", icon: "🌊" },
               { href: "/bilder", title: "Bildgalleri", desc: "Se bilder från familjens vistelser via Instagram.", icon: "📸" },
+              { href: "/gastbok", title: "Gästbok", desc: "Läs och skriv minnen från familjens vistelser.", icon: "📖" },
             ].map((item) => (
               <Link
                 key={item.href}

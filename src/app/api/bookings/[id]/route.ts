@@ -75,12 +75,32 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  const role = (session?.user as { role?: string })?.role;
-  if (!session?.user || role !== "ADMIN") {
+  if (!session?.user) {
     return NextResponse.json({ error: "Åtkomst nekad" }, { status: 403 });
   }
 
   const { id } = await params;
+  const role = (session?.user as { role?: string })?.role;
+  const userId = (session.user as { id: string }).id;
+
+  if (role === "ADMIN") {
+    // Admin kan radera alla bokningar
+    await prisma.booking.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  }
+
+  // Vanlig användare kan bara avboka sin egen PENDING-bokning
+  const booking = await prisma.booking.findUnique({ where: { id } });
+  if (!booking) {
+    return NextResponse.json({ error: "Bokning hittades inte" }, { status: 404 });
+  }
+  if (booking.userId !== userId) {
+    return NextResponse.json({ error: "Åtkomst nekad" }, { status: 403 });
+  }
+  if (booking.status !== "PENDING") {
+    return NextResponse.json({ error: "Kan bara avboka väntande bokningar" }, { status: 400 });
+  }
+
   await prisma.booking.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

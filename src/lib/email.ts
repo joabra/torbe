@@ -9,6 +9,15 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAIL ?? "")
   .filter(Boolean);
 const BASE_URL = process.env.NEXTAUTH_URL ?? "https://torbe.vercel.app";
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function wrap(title: string, body: string) {
   return `<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8">
 <style>body{font-family:sans-serif;background:#f5f5f0;margin:0;padding:24px}
@@ -45,12 +54,14 @@ async function sendToAdmins(subject: string, html: string) {
 
 /** Admin: ny användare väntar på godkännande */
 export async function emailAdminNewUser(user: { name: string; email: string }) {
+  const name = escapeHtml(user.name);
+  const email = escapeHtml(user.email);
   await sendToAdmins(
     `Ny registrering väntar godkännande – ${user.name}`,
     wrap(
       "Ny användare väntar på godkännande",
-      `<p><strong>Namn:</strong> ${user.name}<br>
-       <strong>E-post:</strong> ${user.email}</p>
+      `<p><strong>Namn:</strong> ${name}<br>
+       <strong>E-post:</strong> ${email}</p>
        <p>Logga in på admin-panelen för att godkänna eller avslå kontot.</p>
        <a class="btn" href="${BASE_URL}/admin">Öppna admin-panel</a>`
     )
@@ -59,11 +70,12 @@ export async function emailAdminNewUser(user: { name: string; email: string }) {
 
 /** Användare: konto väntar på godkännande */
 export async function emailUserAwaitingApproval(user: { name: string; email: string }) {
+  const name = escapeHtml(user.name);
   await send(
     user.email,
     "Ditt konto väntar på godkännande – Torbe",
     wrap(
-      `Tack för din registrering, ${user.name}!`,
+      `Tack för din registrering, ${name}!`,
       `<p>Ditt konto har skapats och väntar nu på godkännande av administratören.</p>
        <p>Du får ett e-postmeddelande så fort ditt konto är godkänt och du kan logga in.</p>`
     )
@@ -72,11 +84,12 @@ export async function emailUserAwaitingApproval(user: { name: string; email: str
 
 /** Användare: konto godkänt */
 export async function emailUserAccountApproved(user: { name: string; email: string }) {
+  const name = escapeHtml(user.name);
   await send(
     user.email,
     "Ditt konto är godkänt – Torbe",
     wrap(
-      `Välkommen, ${user.name}! 🎉`,
+      `Välkommen, ${name}! 🎉`,
       `<p>Ditt konto på Torbe har godkänts av administratören. Du kan nu logga in.</p>
        <a class="btn" href="${BASE_URL}/logga-in">Logga in</a>`
     )
@@ -89,16 +102,40 @@ export async function emailAdminNewBooking(
   user: { name: string; email: string }
 ) {
   const fmt = (d: Date) => d.toLocaleDateString("sv-SE");
+  const name = escapeHtml(user.name);
+  const email = escapeHtml(user.email);
+  const message = booking.message ? escapeHtml(booking.message) : null;
   await sendToAdmins(
     `Ny bokningsbegäran: ${fmt(booking.checkIn)} – ${fmt(booking.checkOut)}`,
     wrap(
       "Ny bokningsbegäran",
-      `<p><strong>Gäst:</strong> ${user.name} (${user.email})<br>
+      `<p><strong>Gäst:</strong> ${name} (${email})<br>
        <strong>Incheckning:</strong> ${fmt(booking.checkIn)}<br>
        <strong>Utcheckning:</strong> ${fmt(booking.checkOut)}<br>
        <strong>Antal gäster:</strong> ${booking.guests}</p>
-       ${booking.message ? `<p><strong>Meddelande:</strong><br>${booking.message}</p>` : ""}
+       ${message ? `<p><strong>Meddelande:</strong><br>${message}</p>` : ""}
        <a class="btn" href="${BASE_URL}/admin">Hantera bokning</a>`
+    )
+  );
+}
+
+/** Admin: manuell bokning skapad av admin (bekräftelse till admin) */
+export async function emailAdminManualBookingCreated(
+  booking: { checkIn: Date; checkOut: Date; guests: number; guestName: string; adminNote?: string | null }
+) {
+  const fmt = (d: Date) => d.toLocaleDateString("sv-SE");
+  const guestName = escapeHtml(booking.guestName);
+  const adminNote = booking.adminNote ? escapeHtml(booking.adminNote) : null;
+  await sendToAdmins(
+    `Manuell bokning skapad: ${guestName} – ${fmt(booking.checkIn)}`,
+    wrap(
+      "Manuell bokning skapad",
+      `<p><strong>Gäst:</strong> ${guestName}<br>
+       <strong>Incheckning:</strong> ${fmt(booking.checkIn)}<br>
+       <strong>Utcheckning:</strong> ${fmt(booking.checkOut)}<br>
+       <strong>Antal gäster:</strong> ${booking.guests}</p>
+       ${adminNote ? `<p><strong>Anteckning:</strong><br>${adminNote}</p>` : ""}
+       <a class="btn" href="${BASE_URL}/admin">Öppna admin-panel</a>`
     )
   );
 }
@@ -115,6 +152,7 @@ export async function emailUserBookingStatus(
 ) {
   const fmt = (d: Date) => d.toLocaleDateString("sv-SE");
   const approved = booking.status === "APPROVED";
+  const adminNote = booking.adminNote ? escapeHtml(booking.adminNote) : null;
   await send(
     user.email,
     approved ? "Din bokning är godkänd – Torbe" : "Din bokningsbegäran har avslagits – Torbe",
@@ -122,7 +160,7 @@ export async function emailUserBookingStatus(
       approved ? "Din bokning är godkänd! 🎉" : "Din bokningsbegäran har avslagits",
       `<p><strong>Incheckning:</strong> ${fmt(booking.checkIn)}<br>
        <strong>Utcheckning:</strong> ${fmt(booking.checkOut)}</p>
-       ${booking.adminNote ? `<p><strong>Meddelande från admin:</strong><br>${booking.adminNote}</p>` : ""}
+       ${adminNote ? `<p><strong>Meddelande från admin:</strong><br>${adminNote}</p>` : ""}
        ${approved ? `<a class="btn" href="${BASE_URL}/mina-bokningar">Se dina bokningar</a>` : ""}`
     )
   );

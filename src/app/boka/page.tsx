@@ -2,10 +2,20 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, Users, MessageSquare, CheckCircle, AlertCircle } from "lucide-react";
+import { CalendarDays, Users, CheckCircle, AlertCircle, Lock } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+
+interface BookedPeriod {
+  id: string;
+  checkIn: string;
+  checkOut: string;
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" });
+}
 
 function BokaForm() {
   const { data: session, status } = useSession();
@@ -19,6 +29,17 @@ function BokaForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [bookedPeriods, setBookedPeriods] = useState<BookedPeriod[]>([]);
+
+  useEffect(() => {
+    fetch("/api/bookings")
+      .then((r) => r.json())
+      .then((data: Array<BookedPeriod & { status: string }>) => {
+        const approved = data.filter((b) => b.status === "APPROVED");
+        setBookedPeriods(approved);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -170,6 +191,27 @@ function BokaForm() {
             </form>
           </CardBody>
         </Card>
+
+        {/* Booked periods */}
+        {bookedPeriods.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-sm font-semibold text-stone-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <Lock className="w-4 h-4" />
+              Redan bokade perioder
+            </h2>
+            <div className="space-y-2">
+              {bookedPeriods.map((b) => (
+                <div
+                  key={b.id}
+                  className="flex items-center gap-3 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5 text-sm text-red-800"
+                >
+                  <CalendarDays className="w-4 h-4 shrink-0 text-red-400" />
+                  <span>{formatDate(b.checkIn)} – {formatDate(b.checkOut)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
