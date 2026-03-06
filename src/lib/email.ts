@@ -1,18 +1,6 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const emailPort = Number(process.env.EMAIL_PORT ?? 587);
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: emailPort,
-  secure: emailPort === 465,
-  auth:
-    process.env.EMAIL_USER
-      ? {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
-        }
-      : undefined,
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM = process.env.EMAIL_FROM ?? "noreply@torbe.se";
 const ADMIN_EMAILS = (process.env.ADMIN_EMAIL ?? "")
@@ -34,12 +22,13 @@ a.btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#8b7355;
 }
 
 async function send(to: string, subject: string, html: string) {
-  if (!to || !process.env.EMAIL_HOST) {
-    console.warn(`E-post ej skickad till "${to}" – EMAIL_HOST saknas`);
+  if (!to || !process.env.RESEND_API_KEY) {
+    console.warn(`E-post ej skickad till "${to}" – RESEND_API_KEY saknas`);
     return;
   }
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    const { error } = await resend.emails.send({ from: FROM, to, subject, html });
+    if (error) throw error;
     console.log(`E-post skickad: ${subject} → ${to}`);
   } catch (err) {
     console.error(`E-postfel (till: ${to}, ämne: ${subject}):`, err);
