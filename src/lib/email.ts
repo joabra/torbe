@@ -46,11 +46,17 @@ async function send(to: string, subject: string, html: string) {
   }
 }
 
+async function sendToAdmins(subject: string, html: string) {
+  if (ADMIN_EMAILS.length === 0) {
+    console.warn("Inga admin-adresser konfigurerade (ADMIN_EMAIL saknas)");
+    return;
+  }
+  await Promise.all(ADMIN_EMAILS.map((to) => send(to, subject, html)));
+}
+
 /** Admin: ny användare väntar på godkännande */
 export async function emailAdminNewUser(user: { name: string; email: string }) {
-  if (ADMIN_EMAILS.length === 0) return;
-  await send(
-    ADMIN_EMAILS.join(","),
+  await sendToAdmins(
     `Ny registrering väntar godkännande – ${user.name}`,
     wrap(
       "Ny användare väntar på godkännande",
@@ -93,10 +99,8 @@ export async function emailAdminNewBooking(
   booking: { checkIn: Date; checkOut: Date; guests: number; message?: string | null },
   user: { name: string; email: string }
 ) {
-  if (ADMIN_EMAILS.length === 0) return;
   const fmt = (d: Date) => d.toLocaleDateString("sv-SE");
-  await send(
-    ADMIN_EMAILS.join(","),
+  await sendToAdmins(
     `Ny bokningsbegäran: ${fmt(booking.checkIn)} – ${fmt(booking.checkOut)}`,
     wrap(
       "Ny bokningsbegäran",
