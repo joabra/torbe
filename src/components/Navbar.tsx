@@ -64,7 +64,9 @@ export function Navbar() {
         <div className="hidden md:flex items-center gap-3">
           {session ? (
             <>
-              <span className="text-sm text-stone-500">Hej, {session.user?.name?.split(" ")[0]}</span>
+              <Link href="/konto" className="text-sm text-stone-500 hover:text-forest-800 transition-colors">
+                Hej, {session.user?.name?.split(" ")[0]}
+              </Link>
               <Button variant="outline" size="sm" onClick={() => signOut({ callbackUrl: "/" })}>
                 Logga ut
               </Button>
@@ -110,9 +112,14 @@ export function Navbar() {
             </Link>
           ))}
           {session && (
-            <Link href="/mina-bokningar" onClick={() => setOpen(false)} className="px-4 py-3 rounded-xl text-sm font-medium text-stone-700 hover:bg-forest-50">
-              Mina bokningar
-            </Link>
+            <>
+              <Link href="/mina-bokningar" onClick={() => setOpen(false)} className="px-4 py-3 rounded-xl text-sm font-medium text-stone-700 hover:bg-forest-50">
+                Mina bokningar
+              </Link>
+              <Link href="/konto" onClick={() => setOpen(false)} className="px-4 py-3 rounded-xl text-sm font-medium text-stone-700 hover:bg-forest-50">
+                Kontoinställningar
+              </Link>
+            </>
           )}
           {role === "ADMIN" && (
             <Link href="/admin" onClick={() => setOpen(false)} className="px-4 py-3 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50">
