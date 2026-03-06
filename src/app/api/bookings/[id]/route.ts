@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { emailUserBookingStatus } from "@/lib/email";
+
+export const maxDuration = 30;
 import { z } from "zod";
 
 const schema = z.object({
@@ -54,9 +56,9 @@ export async function PATCH(
       include: { user: { select: { name: true, email: true } } },
     });
 
-    // Notifiera användaren om statusbytet (fire-and-forget)
+    // Notifiera användaren om statusbytet
     if (updated.user) {
-      void emailUserBookingStatus(
+      await emailUserBookingStatus(
         { status, checkIn: updated.checkIn, checkOut: updated.checkOut, adminNote: updated.adminNote },
         { name: updated.user.name, email: updated.user.email }
       );
