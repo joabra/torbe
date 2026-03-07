@@ -96,7 +96,7 @@ export function Navbar() {
                 href="/anlanding"
                 className="px-4 py-2 rounded-full text-sm font-medium text-stone-600 hover:text-forest-800 hover:bg-forest-50 transition-colors"
               >
-                Anländning
+                Ankomst
               </Link>
             </li>
           )}
@@ -192,7 +192,7 @@ export function Navbar() {
                 )}
               </Link>
               <Link href="/anlanding" onClick={() => setOpen(false)} className="px-4 py-3 rounded-xl text-sm font-medium text-stone-700 hover:bg-forest-50">
-                Anländning
+                Ankomst
               </Link>
               <Link href="/konto" onClick={() => setOpen(false)} className="px-4 py-3 rounded-xl text-sm font-medium text-stone-700 hover:bg-forest-50">
                 Kontoinställningar

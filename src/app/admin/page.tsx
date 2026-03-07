@@ -59,6 +59,7 @@ interface ArrivalInfo {
   houseRules: string;
   emergencyContact: string;
   departureChecklist: string[];
+  manualSections: Array<{ title: string; content: string }>;
 }
 
 interface BookingMessage {
@@ -169,8 +170,10 @@ export default function AdminPage() {
 
   // Arrival info
   const [arrivalForm, setArrivalForm] = useState<ArrivalInfo>({
-    wifiName: "", wifiPassword: "", checkInInstructions: "", parkingInfo: "", houseRules: "", emergencyContact: "", departureChecklist: [],
+    wifiName: "", wifiPassword: "", checkInInstructions: "", parkingInfo: "", houseRules: "", emergencyContact: "", departureChecklist: [], manualSections: [],
   });
+  const [newManualTitle, setNewManualTitle] = useState("");
+  const [newManualContent, setNewManualContent] = useState("");
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [arrivalLoading, setArrivalLoading] = useState(false);
   const [arrivalSuccess, setArrivalSuccess] = useState(false);
@@ -238,7 +241,14 @@ export default function AdminPage() {
         setAdminStats(s);
         setWaitlistEntries(w);
         if (apt) setApartmentForm(apt);
-        if (arr) setArrivalForm((prev) => ({ ...prev, ...arr }));
+        if (arr) {
+          setArrivalForm((prev) => ({
+            ...prev,
+            ...arr,
+            departureChecklist: Array.isArray(arr.departureChecklist) ? arr.departureChecklist : [],
+            manualSections: Array.isArray(arr.manualSections) ? arr.manualSections : [],
+          }));
+        }
       }).finally(() => setLoading(false));
     }
   }, [status, role, router]);
@@ -423,6 +433,19 @@ export default function AdminPage() {
       setTimeout(() => setArrivalSuccess(false), 3000);
     }
     setArrivalLoading(false);
+  }
+
+  function handleAddManualSection() {
+    const title = newManualTitle.trim();
+    const content = newManualContent.trim();
+    if (!title || !content) return;
+    setArrivalForm((p) => ({ ...p, manualSections: [...p.manualSections, { title, content }] }));
+    setNewManualTitle("");
+    setNewManualContent("");
+  }
+
+  function handleRemoveManualSection(index: number) {
+    setArrivalForm((p) => ({ ...p, manualSections: p.manualSections.filter((_, i) => i !== index) }));
   }
 
   async function handleProposeDate(bookingId: string) {
@@ -1216,7 +1239,7 @@ export default function AdminPage() {
             <CardHeader>
               <div className="flex items-center gap-2 font-semibold text-forest-800">
                 <Key className="w-4 h-4 text-sand-500" />
-                Anländningsinformation
+                Ankomstinformation
               </div>
               <p className="text-sm text-stone-400 mt-1">Visas för gäster med godkänd bokning på sidan /anlanding</p>
             </CardHeader>
@@ -1260,6 +1283,67 @@ export default function AdminPage() {
                   value={arrivalForm.emergencyContact}
                   onChange={(e) => setArrivalForm((p) => ({ ...p, emergencyContact: e.target.value }))}
                 />
+
+                <div>
+                  <label className="text-sm font-medium text-forest-800 block mb-2">Husmanual (fler sektioner)</label>
+                  <p className="text-xs text-stone-400 mb-3">Tips: skapa tydliga avsnitt som "Kök", "AC", "Sopor", "Pool", "Utcheckning".</p>
+
+                  <div className="flex flex-col gap-3 mb-3">
+                    {arrivalForm.manualSections.map((section, i) => (
+                      <div key={`${section.title}-${i}`} className="bg-stone-50 rounded-xl p-3 border border-stone-100">
+                        <Input
+                          label="Rubrik"
+                          value={section.title}
+                          onChange={(e) => setArrivalForm((p) => ({
+                            ...p,
+                            manualSections: p.manualSections.map((item, idx) => idx === i ? { ...item, title: e.target.value } : item),
+                          }))}
+                        />
+                        <Textarea
+                          className="mt-2"
+                          label="Innehåll"
+                          value={section.content}
+                          onChange={(e) => setArrivalForm((p) => ({
+                            ...p,
+                            manualSections: p.manualSections.map((item, idx) => idx === i ? { ...item, content: e.target.value } : item),
+                          }))}
+                        />
+                        <div className="mt-2 flex justify-end">
+                          <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveManualSection(i)}>
+                            <Trash2 className="w-4 h-4" />
+                            Ta bort sektion
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {arrivalForm.manualSections.length === 0 && (
+                      <p className="text-xs text-stone-400 italic">Inga manualsektioner ännu</p>
+                    )}
+                  </div>
+
+                  <div className="bg-forest-50/50 rounded-xl p-3 border border-forest-100">
+                    <Input
+                      label="Ny rubrik"
+                      placeholder="t.ex. Luftkonditionering"
+                      value={newManualTitle}
+                      onChange={(e) => setNewManualTitle(e.target.value)}
+                    />
+                    <Textarea
+                      className="mt-2"
+                      label="Nytt innehåll"
+                      placeholder="Skriv instruktioner här..."
+                      value={newManualContent}
+                      onChange={(e) => setNewManualContent(e.target.value)}
+                    />
+                    <div className="mt-2">
+                      <Button type="button" variant="outline" size="sm" onClick={handleAddManualSection}>
+                        <Plus className="w-4 h-4" />
+                        Lägg till manualsektion
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Departure checklist */}
                 <div>
                   <label className="text-sm font-medium text-forest-800 block mb-2">Avresechecklista</label>
@@ -1318,11 +1402,11 @@ export default function AdminPage() {
 
                 {arrivalSuccess && (
                   <div className="bg-emerald-50 text-emerald-700 rounded-xl px-4 py-3 text-sm">
-                    Anländningsinformation uppdaterad!
+                    Ankomstinformation uppdaterad!
                   </div>
                 )}
                 <Button type="submit" variant="sand" disabled={arrivalLoading}>
-                  {arrivalLoading ? "Sparar..." : "Spara anländningsinformation"}
+                  {arrivalLoading ? "Sparar..." : "Spara ankomstinformation"}
                 </Button>
               </form>
             </CardBody>

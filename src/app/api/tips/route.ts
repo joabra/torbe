@@ -3,6 +3,39 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
 
+const GEO_REFRESH_MS = 1000 * 60 * 60 * 24 * 7;
+
+function shouldRefreshGeocode(tip: {
+  latitude: number | null;
+  longitude: number | null;
+  geocodedAt: Date | null;
+}) {
+  if (!tip.geocodedAt) return true;
+  const age = Date.now() - new Date(tip.geocodedAt).getTime();
+  const stale = age > GEO_REFRESH_MS;
+  const hasCoords = Number.isFinite(tip.latitude) && Number.isFinite(tip.longitude);
+  if (!hasCoords) return stale;
+  return stale;
+}
+
+async function geocodeTip(query: string, apiKey: string) {
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      status?: string;
+      results?: Array<{ geometry?: { location?: { lat?: number; lng?: number } } }>;
+    };
+    if (data.status !== "OK" || !data.results?.length) return null;
+    const loc = data.results[0]?.geometry?.location;
+    if (!loc || typeof loc.lat !== "number" || typeof loc.lng !== "number") return null;
+    return { lat: loc.lat, lng: loc.lng };
+  } catch {
+    return null;
+  }
+}
+
 const CURATED_LOCATION_IMAGES: Record<string, string> = {
   "El Varadero – Torre de la Horadada": "https://upload.wikimedia.org/wikipedia/commons/e/e8/Puerto_deportivo_Torre_Horadada.jpg",
   "Chiringuitos på Playa Mil Palmeras": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Playa_de_las_Mil_Palmeras_%28Alicante%29.jpg/1920px-Playa_de_las_Mil_Palmeras_%28Alicante%29.jpg",
@@ -46,10 +79,46 @@ export async function GET() {
     const session = await auth();
     const userId = session?.user ? (session.user as { id: string }).id : null;
 
-    const tips = await prisma.tip.findMany({ orderBy: { createdAt: "desc" } });
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY ?? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+    let tips = await prisma.tip.findMany({ orderBy: { createdAt: "desc" } });
+
+    if (apiKey) {
+      for (const tip of tips) {
+        if (!shouldRefreshGeocode(tip)) continue;
+        const baseQuery = `${tip.address?.trim() || tip.title.trim()}, Torrevieja, Spain`;
+        const fallbackQuery = `${tip.title.trim()}, Torrevieja, Spain`;
+
+        let coords = await geocodeTip(baseQuery, apiKey);
+        if (!coords && fallbackQuery !== baseQuery) {
+          coords = await geocodeTip(fallbackQuery, apiKey);
+        }
+
+        if (coords) {
+          await prisma.tip.update({
+            where: { id: tip.id },
+            data: {
+              latitude: coords.lat,
+              longitude: coords.lng,
+              geocodedAt: new Date(),
+            },
+          });
+        } else {
+          // Avoid repeated requests on every page load when geocoding fails.
+          await prisma.tip.update({
+            where: { id: tip.id },
+            data: { geocodedAt: new Date() },
+          });
+        }
+      }
+
+      tips = await prisma.tip.findMany({ orderBy: { createdAt: "desc" } });
+    }
 
     const countMap: Record<string, number> = {};
+    const visitCountMap: Record<string, number> = {};
     let votedSet = new Set<string>();
+    const userVisitMap = new Map<string, { note: string | null; rating: number | null; visitedAt: Date }>();
 
     try {
       const allVotes = await prisma.tipVote.findMany({ select: { tipId: true, userId: true } });
@@ -64,12 +133,35 @@ export async function GET() {
       // Votes table may not exist yet — return tips without vote info
     }
 
+    try {
+      const allVisits = await prisma.tipVisit.findMany({
+        select: { tipId: true, userId: true, note: true, rating: true, visitedAt: true },
+      });
+      for (const v of allVisits) {
+        visitCountMap[v.tipId] = (visitCountMap[v.tipId] ?? 0) + 1;
+      }
+      if (userId) {
+        for (const v of allVisits) {
+          if (v.userId === userId) {
+            userVisitMap.set(v.tipId, { note: v.note, rating: v.rating, visitedAt: v.visitedAt });
+          }
+        }
+      }
+    } catch {
+      // Visit table may not exist yet — return tips without visit info
+    }
+
     return NextResponse.json(
       tips.map((t) => ({
         ...t,
         imageUrl: resolveTipImage(t.title, t.imageUrl),
         voteCount: countMap[t.id] ?? 0,
         userVoted: votedSet.has(t.id),
+        visitCount: visitCountMap[t.id] ?? 0,
+        userVisited: userVisitMap.has(t.id),
+        userVisitNote: userVisitMap.get(t.id)?.note ?? null,
+        userVisitRating: userVisitMap.get(t.id)?.rating ?? null,
+        userVisitedAt: userVisitMap.get(t.id)?.visitedAt ?? null,
       }))
     );
   } catch (err) {

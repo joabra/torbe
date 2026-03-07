@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { MapPin, Globe, Map, Plus, Pencil, Trash2, X, Heart, Calendar, Navigation } from "lucide-react";
+import { MapPin, Globe, Map, Plus, Pencil, Trash2, X, Heart, Calendar, Navigation, List, Star } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -26,6 +26,14 @@ interface Tip {
   familyFriendly?: boolean | null;
   bestTimeToVisit?: string | null;
   carRequired?: boolean | null;
+  visitCount?: number;
+  userVisited?: boolean;
+  userVisitNote?: string | null;
+  userVisitRating?: number | null;
+  userVisitedAt?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  geocodedAt?: string | null;
 }
 
 const CATEGORIES = ["RESTAURANT", "EXCURSION", "MARKET", "EVENT", "OTHER"] as const;
@@ -256,8 +264,202 @@ function getDirectionsUrl(tip: Tip) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
 }
 
-function TipDetailsModal({ tip, onClose }: { tip: Tip; onClose: () => void }) {
+let googleMapsLoadPromise: Promise<void> | null = null;
+
+function loadGoogleMapsApi(apiKey: string) {
+  if (typeof window === "undefined") return Promise.resolve();
+  const w = window as unknown as { google?: unknown; __gmapsReady?: () => void };
+  if (w.google) return Promise.resolve();
+  if (googleMapsLoadPromise) return googleMapsLoadPromise;
+
+  googleMapsLoadPromise = new Promise<void>((resolve, reject) => {
+    w.__gmapsReady = () => resolve();
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=__gmapsReady`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => reject(new Error("Kunde inte ladda Google Maps"));
+    document.head.appendChild(script);
+  });
+
+  return googleMapsLoadPromise;
+}
+
+function fallbackPosition(index: number) {
+  const baseLat = 37.979;
+  const baseLng = -0.683;
+  const angle = (Math.PI * 2 * (index % 16)) / 16;
+  const radius = 0.01 + (index % 5) * 0.003;
+  return {
+    lat: baseLat + Math.sin(angle) * radius,
+    lng: baseLng + Math.cos(angle) * radius,
+  };
+}
+
+function GoogleTipsMap({
+  tips,
+  activeTipId,
+  onSelectTip,
+}: {
+  tips: Tip[];
+  activeTipId: string | null;
+  onSelectTip: (tipId: string) => void;
+}) {
+  const mapElRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const infoWindowRef = useRef<any>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
+
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function setup() {
+      if (!apiKey) {
+        setMapError("Google Maps API-nyckel saknas (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).");
+        return;
+      }
+
+      try {
+        await loadGoogleMapsApi(apiKey);
+      } catch {
+        if (mounted) setMapError("Kunde inte ladda Google Maps just nu.");
+        return;
+      }
+
+      if (!mounted || !mapElRef.current) return;
+
+      const g = (window as any).google;
+      if (!mapRef.current) {
+        mapRef.current = new g.maps.Map(mapElRef.current, {
+          center: { lat: 37.979, lng: -0.683 },
+          zoom: 11,
+          mapTypeControl: false,
+          streetViewControl: false,
+        });
+        infoWindowRef.current = new g.maps.InfoWindow();
+      }
+
+      const map = mapRef.current;
+
+      const positions = tips.map((tip, idx) => {
+        if (typeof tip.latitude === "number" && typeof tip.longitude === "number") {
+          return { lat: tip.latitude, lng: tip.longitude };
+        }
+        return fallbackPosition(idx);
+      });
+      if (!mounted) return;
+
+      for (const m of markersRef.current) {
+        m.setMap(null);
+      }
+      markersRef.current = [];
+
+      const bounds = new g.maps.LatLngBounds();
+
+      tips.forEach((tip, idx) => {
+        const pos = positions[idx];
+        const marker = new g.maps.Marker({
+          position: pos,
+          map,
+          title: tip.title,
+          label: {
+            text: String(idx + 1),
+            color: "#ffffff",
+            fontWeight: "700",
+          },
+          icon: {
+            path: g.maps.SymbolPath.CIRCLE,
+            scale: 12,
+            fillColor: "#1f6b3a",
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeWeight: 2,
+          },
+        });
+
+        marker.addListener("click", () => {
+          onSelectTip(tip.id);
+          infoWindowRef.current.setContent(`<b>${idx + 1}. ${tip.title}</b>`);
+          infoWindowRef.current.open({ anchor: marker, map });
+        });
+
+        markersRef.current.push(marker);
+        bounds.extend(pos);
+      });
+
+      if (tips.length === 1) {
+        map.setCenter(positions[0]);
+        map.setZoom(14);
+      } else if (activeTipId) {
+        const focus = tips.find((t) => t.id === activeTipId);
+        const focusIdx = focus ? tips.findIndex((t) => t.id === focus.id) : -1;
+        const focusPos = focusIdx >= 0 ? positions[focusIdx] : null;
+        if (focusPos) {
+          map.setCenter(focusPos);
+          map.setZoom(15);
+        } else {
+          map.fitBounds(bounds, 50);
+        }
+      } else {
+        map.fitBounds(bounds, 50);
+      }
+    }
+
+    setup();
+    return () => {
+      mounted = false;
+    };
+  }, [tips, activeTipId, onSelectTip, apiKey]);
+
+  if (mapError) {
+    return (
+      <div className="h-[60vh] flex items-center justify-center text-center px-6 text-sm text-stone-500">
+        {mapError}
+      </div>
+    );
+  }
+
+  return <div ref={mapElRef} className="w-full h-[60vh]" />;
+}
+
+function TipDetailsModal({
+  tip,
+  onClose,
+  isLoggedIn,
+  onVisitChanged,
+}: {
+  tip: Tip;
+  onClose: () => void;
+  isLoggedIn: boolean;
+  onVisitChanged: () => void;
+}) {
   const directionsUrl = getDirectionsUrl(tip);
+  const [visitNote, setVisitNote] = useState(tip.userVisitNote ?? "");
+  const [visitRating, setVisitRating] = useState<number>(tip.userVisitRating ?? 5);
+  const [visitSaving, setVisitSaving] = useState(false);
+
+  async function handleSaveVisit() {
+    if (!isLoggedIn) return;
+    setVisitSaving(true);
+    await fetch(`/api/tips/${tip.id}/visit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: visitNote, rating: visitRating }),
+    });
+    setVisitSaving(false);
+    onVisitChanged();
+  }
+
+  async function handleRemoveVisit() {
+    if (!isLoggedIn) return;
+    setVisitSaving(true);
+    await fetch(`/api/tips/${tip.id}/visit`, { method: "DELETE" });
+    setVisitSaving(false);
+    onVisitChanged();
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4" onClick={onClose}>
@@ -294,6 +496,9 @@ function TipDetailsModal({ tip, onClose }: { tip: Tip; onClose: () => void }) {
           )}
 
           <div className="mt-5 space-y-2">
+            <p className="text-sm text-stone-500 inline-flex items-center gap-2">
+              Besök loggade: {tip.visitCount ?? 0}
+            </p>
             {tip.priceLevel && (
               <p className="text-sm text-stone-500 inline-flex items-center gap-2">
                 Prisnivå: {"€".repeat(tip.priceLevel)}
@@ -331,6 +536,61 @@ function TipDetailsModal({ tip, onClose }: { tip: Tip; onClose: () => void }) {
                 <MapPin className="w-4 h-4 text-sand-500" />
                 {tip.address}
               </p>
+            )}
+          </div>
+
+          <div className="mt-6 rounded-xl border border-stone-200 p-4 bg-stone-50/60">
+            <p className="text-sm font-semibold text-stone-700 mb-2">Besökslogg</p>
+            {!isLoggedIn ? (
+              <p className="text-xs text-stone-500">Logga in för att markera att du varit här.</p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-stone-500">Ditt betyg</span>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setVisitRating(n)}
+                        className={`p-1 rounded ${visitRating >= n ? "text-amber-500" : "text-stone-300"}`}
+                        aria-label={`Satt betyg ${n}`}
+                      >
+                        <Star className={`w-4 h-4 ${visitRating >= n ? "fill-current" : ""}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <textarea
+                  rows={3}
+                  value={visitNote}
+                  onChange={(e) => setVisitNote(e.target.value)}
+                  className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
+                  placeholder="Skriv en kort anteckning om ditt besok"
+                />
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveVisit}
+                    disabled={visitSaving}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-forest-800 text-white text-xs font-semibold hover:bg-forest-900 disabled:opacity-60"
+                  >
+                    {visitSaving ? "Sparar..." : tip.userVisited ? "Uppdatera logg" : "Jag har varit har"}
+                  </button>
+                  {tip.userVisited && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveVisit}
+                      disabled={visitSaving}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-stone-200 text-xs font-semibold text-stone-600 hover:bg-stone-100 disabled:opacity-60"
+                    >
+                      Ta bort min logg
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
 
@@ -389,6 +649,8 @@ export default function AktiviteterPage() {
   const [showModal, setShowModal] = useState(false);
   const [editTip, setEditTip] = useState<Tip | undefined>();
   const [detailTip, setDetailTip] = useState<Tip | null>(null);
+  const [viewMode, setViewMode] = useState<"LIST" | "MAP">("LIST");
+  const [activeMapTipId, setActiveMapTipId] = useState<string | null>(null);
 
   async function fetchTips() {
     const res = await fetch("/api/tips");
@@ -454,7 +716,14 @@ export default function AktiviteterPage() {
           onSaved={loadTips}
         />
       )}
-      {detailTip && <TipDetailsModal tip={detailTip} onClose={() => setDetailTip(null)} />}
+      {detailTip && (
+        <TipDetailsModal
+          tip={detailTip}
+          onClose={() => setDetailTip(null)}
+          isLoggedIn={isLoggedIn}
+          onVisitChanged={loadTips}
+        />
+      )}
 
       <div className="max-w-5xl mx-auto">
         {/* Header */}
@@ -491,6 +760,13 @@ export default function AktiviteterPage() {
 
         {tips.length > 0 && (
           <div className="flex flex-wrap gap-2 justify-center mb-8">
+            <button
+              onClick={() => setViewMode((v) => (v === "LIST" ? "MAP" : "LIST"))}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors inline-flex items-center gap-1.5 ${viewMode === "MAP" ? "bg-forest-800 text-white" : "bg-white text-stone-600 border border-stone-200 hover:bg-stone-50"}`}
+            >
+              {viewMode === "MAP" ? <List className="w-4 h-4" /> : <Map className="w-4 h-4" />}
+              {viewMode === "MAP" ? "Listvy" : "Kartvy"}
+            </button>
             {isLoggedIn && (
               <button
                 onClick={() => setFavoritesOnly((v) => !v)}
@@ -508,14 +784,15 @@ export default function AktiviteterPage() {
           </div>
         )}
 
-        {/* Tips grid */}
+        {/* Tips grid / map */}
         {loading ? (
           <div className="flex justify-center py-20">
             <div className="w-8 h-8 border-4 border-sand-400 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayTips.map((tip) => (
+          viewMode === "LIST" ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {displayTips.map((tip) => (
               <Card
                 key={tip.id}
                 className="hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
@@ -647,8 +924,42 @@ export default function AktiviteterPage() {
                   </div>
                 </CardBody>
               </Card>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid lg:grid-cols-[1.1fr_1.6fr] gap-6">
+              <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                <button
+                  onClick={() => setActiveMapTipId(null)}
+                  className={`w-full text-left rounded-xl border px-4 py-3 transition-colors ${activeMapTipId === null ? "border-forest-600 bg-forest-50" : "border-stone-200 bg-white hover:bg-stone-50"}`}
+                >
+                  <p className="text-sm font-bold text-forest-900">Visa alla tips</p>
+                  <p className="text-xs text-stone-500 mt-1">Kartoversikt med flera markeringar</p>
+                </button>
+                {displayTips.map((tip, idx) => {
+                  const active = activeMapTipId === tip.id;
+                  return (
+                    <button
+                      key={tip.id}
+                      onClick={() => setActiveMapTipId(tip.id)}
+                      className={`w-full text-left rounded-xl border px-4 py-3 transition-colors ${active ? "border-forest-600 bg-forest-50" : "border-stone-200 bg-white hover:bg-stone-50"}`}
+                    >
+                      <p className="text-sm font-bold text-forest-900">{idx + 1}. {tip.title}</p>
+                      {tip.address && <p className="text-xs text-stone-500 mt-1">{tip.address}</p>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="rounded-2xl overflow-hidden border border-stone-200 bg-white min-h-[60vh]">
+                {displayTips.length > 0 ? (
+                  <GoogleTipsMap tips={displayTips} activeTipId={activeMapTipId} onSelectTip={setActiveMapTipId} />
+                ) : (
+                  <div className="h-[60vh] flex items-center justify-center text-stone-400">Inga tips att visa pa kartan.</div>
+                )}
+              </div>
+            </div>
+          )
         )}
 
         {displayTips.length === 0 && !loading && (

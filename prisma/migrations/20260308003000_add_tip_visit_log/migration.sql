@@ -1,0 +1,21 @@
+CREATE TABLE "TipVisit" (
+  "id" TEXT NOT NULL,
+  "tipId" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "note" TEXT,
+  "rating" INTEGER,
+  "visitedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "TipVisit_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "TipVisit_tipId_userId_key" ON "TipVisit"("tipId", "userId");
+
+ALTER TABLE "TipVisit"
+ADD CONSTRAINT "TipVisit_tipId_fkey"
+FOREIGN KEY ("tipId") REFERENCES "Tip"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "TipVisit"
+ADD CONSTRAINT "TipVisit_userId_fkey"
+FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

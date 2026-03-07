@@ -24,7 +24,8 @@ function hasRequiredDelegates(client: PrismaClient) {
       runtime.supportMessage &&
       runtime.poll &&
       runtime.notification &&
-      runtime.instagramLink
+      runtime.instagramLink &&
+      runtime.tipVisit
   );
 }
 

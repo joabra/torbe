@@ -32,6 +32,7 @@ model User {
   createdPolls     Poll[]
   notifications    Notification[]
   instagramLinks   InstagramLink[]
+  tipVisits        TipVisit[]
 }
 
 model GuestbookEntry {
@@ -123,6 +124,9 @@ model Tip {
   website     String?
   imageUrl    String?
   mapUrl      String?
+  latitude    Float?
+  longitude   Float?
+  geocodedAt  DateTime?
   openMonths  Int[]
   seasonNote  String?
   priceLevel  Int?
@@ -134,6 +138,22 @@ model Tip {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   votes       TipVote[]
+  visits      TipVisit[]
+}
+
+model TipVisit {
+  id        String   @id @default(cuid())
+  tipId      String
+  tip        Tip      @relation(fields: [tipId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note       String?
+  rating     Int?
+  visitedAt  DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([tipId, userId])
 }
 
 enum TipCategory {

@@ -13,6 +13,7 @@ interface ArrivalInfo {
   houseRules?: string;
   emergencyContact?: string;
   departureChecklist?: string[];
+  manualSections?: Array<{ title: string; content: string }>;
 }
 
 function InfoBlock({ icon, title, content }: { icon: React.ReactNode; title: string; content?: string }) {
@@ -92,14 +93,28 @@ export default function AnlandningPage() {
     );
   }
 
-  const hasContent = info && Object.values(info).some(Boolean);
+  const hasContent = Boolean(
+    info && (
+      info.wifiName?.trim() ||
+      info.wifiPassword?.trim() ||
+      info.checkInInstructions?.trim() ||
+      info.parkingInfo?.trim() ||
+      info.houseRules?.trim() ||
+      info.emergencyContact?.trim() ||
+      (Array.isArray(info.departureChecklist) && info.departureChecklist.length > 0) ||
+      (Array.isArray(info.manualSections) && info.manualSections.some((s) => s?.title?.trim() && s?.content?.trim()))
+    )
+  );
+  const manualSections = Array.isArray(info?.manualSections)
+    ? info!.manualSections.filter((s) => s?.title?.trim() && s?.content?.trim())
+    : [];
 
   return (
     <div className="pt-28 pb-20 min-h-screen bg-stone-50 px-6">
       <div className="max-w-2xl mx-auto">
         <div className="mb-10">
           <span className="text-sand-500 text-sm font-semibold uppercase tracking-widest">Välkommen</span>
-          <h1 className="mt-3 text-4xl font-bold text-forest-900">Anländningsinformation</h1>
+          <h1 className="mt-3 text-4xl font-bold text-forest-900">Ankomstinformation</h1>
           <p className="mt-2 text-stone-500">
             Hej {session?.user?.name?.split(" ")[0]}! Här hittar du allt du behöver inför din vistelse.
           </p>
@@ -143,6 +158,15 @@ export default function AnlandningPage() {
             <InfoBlock icon={<Car className="w-4 h-4 text-sand-500" />} title="Parkering" content={info?.parkingInfo} />
             <InfoBlock icon={<FileText className="w-4 h-4 text-sand-500" />} title="Husregler" content={info?.houseRules} />
             <InfoBlock icon={<Phone className="w-4 h-4 text-sand-500" />} title="Nödkontakt" content={info?.emergencyContact} />
+
+            {manualSections.map((section, idx) => (
+              <InfoBlock
+                key={`${section.title}-${idx}`}
+                icon={<FileText className="w-4 h-4 text-sand-500" />}
+                title={section.title}
+                content={section.content}
+              />
+            ))}
 
             {info?.departureChecklist && info.departureChecklist.length > 0 && (
               <Card>

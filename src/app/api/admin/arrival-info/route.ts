@@ -11,6 +11,12 @@ const arrivalSchema = z.object({
   houseRules: z.string().max(2000).optional().default(""),
   emergencyContact: z.string().max(200).optional().default(""),
   departureChecklist: z.array(z.string().max(200)).optional().default([]),
+  manualSections: z.array(
+    z.object({
+      title: z.string().min(1).max(120),
+      content: z.string().min(1).max(4000),
+    })
+  ).max(20).optional().default([]),
 });
 
 // GET - authenticated users with approved booking may read
