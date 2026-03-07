@@ -13,6 +13,10 @@ const schema = z.object({
   mapUrl: z.string().url().optional().or(z.literal("")),
   openMonths: z.array(z.number().int().min(1).max(12)).optional(),
   seasonNote: z.string().max(200).optional(),
+  priceLevel: z.number().int().min(1).max(3).optional(),
+  familyFriendly: z.boolean().optional(),
+  bestTimeToVisit: z.string().max(120).optional(),
+  carRequired: z.boolean().optional(),
 });
 
 async function canModify(tipId: string) {

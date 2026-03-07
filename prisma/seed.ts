@@ -36,6 +36,10 @@ async function main() {
       address: "Puerto de Torre de la Horadada, Pilar de la Horadada",
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Puerto_deportivo_Torre_Horadada.jpg",
       mapUrl: "https://maps.google.com/?q=Torre+de+la+Horadada+puerto",
+      priceLevel: 2,
+      familyFriendly: true,
+      bestTimeToVisit: "Kväll",
+      carRequired: false,
     },
     {
       category: "RESTAURANT" as const,
@@ -44,6 +48,46 @@ async function main() {
       address: "Playa de Mil Palmeras, Pilar de la Horadada",
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Playa_de_las_Mil_Palmeras_%28Alicante%29.jpg/1920px-Playa_de_las_Mil_Palmeras_%28Alicante%29.jpg",
       mapUrl: "https://maps.google.com/?q=Playa+Mil+Palmeras",
+      priceLevel: 1,
+      familyFriendly: true,
+      bestTimeToVisit: "Lunch",
+      carRequired: false,
+    },
+    {
+      category: "RESTAURANT" as const,
+      title: "El Meson De La Costa",
+      description: "Klassisk restaurang i centrala Torrevieja som ofta namns i restaurangguider. Ett bra val for lokala ratter och fisk.",
+      address: "Calle Ramon Gallud, Torrevieja",
+      imageUrl: "/tips/restaurant.jpg",
+      mapUrl: "https://maps.google.com/?q=El+Meson+De+La+Costa+Torrevieja",
+      priceLevel: 2,
+      familyFriendly: true,
+      bestTimeToVisit: "Kväll",
+      carRequired: true,
+    },
+    {
+      category: "RESTAURANT" as const,
+      title: "Bodegon Riojano",
+      description: "Populart stopp i Torrevieja for rustik spansk mat i avslappnad miljo. Bra for middag efter en dag vid stranden.",
+      address: "Calle Apolo, Torrevieja",
+      imageUrl: "/tips/restaurant.jpg",
+      mapUrl: "https://maps.google.com/?q=Bodegon+Riojano+Torrevieja",
+      priceLevel: 2,
+      familyFriendly: true,
+      bestTimeToVisit: "Kväll",
+      carRequired: true,
+    },
+    {
+      category: "RESTAURANT" as const,
+      title: "Restaurante Vela Centro",
+      description: "Ligger nara strandpromenaden och namns ofta bland rekommenderade restauranger i Torrevieja. Bra skaldjur och maritim kansla.",
+      address: "Paseo Vistalegre, Torrevieja",
+      imageUrl: "/tips/restaurant.jpg",
+      mapUrl: "https://maps.google.com/?q=Restaurante+Vela+Centro+Torrevieja",
+      priceLevel: 3,
+      familyFriendly: true,
+      bestTimeToVisit: "Solnedgång",
+      carRequired: true,
     },
     {
       category: "EXCURSION" as const,
@@ -52,6 +96,10 @@ async function main() {
       address: "Playa de Lo Pagán, San Pedro del Pinatar",
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Vista_a%C3%A9rea_del_puerto_deportivo_de_Lo_Pag%C3%A1n_01.jpg/1920px-Vista_a%C3%A9rea_del_puerto_deportivo_de_Lo_Pag%C3%A1n_01.jpg",
       mapUrl: "https://maps.google.com/?q=Lo+Pagan+mud+baths+San+Pedro+del+Pinatar",
+      priceLevel: 1,
+      familyFriendly: true,
+      bestTimeToVisit: "Morgon",
+      carRequired: true,
     },
     {
       category: "EXCURSION" as const,
@@ -61,6 +109,34 @@ async function main() {
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Laguna_Salada_de_Torrevieja_-_52451565734.jpg/1920px-Laguna_Salada_de_Torrevieja_-_52451565734.jpg",
       mapUrl: "https://maps.google.com/?q=Salinas+de+Torrevieja",
       website: "https://www.torrevieja.es",
+      priceLevel: 1,
+      familyFriendly: true,
+      bestTimeToVisit: "Sen eftermiddag",
+      carRequired: true,
+    },
+    {
+      category: "EXCURSION" as const,
+      title: "Playa de La Mata",
+      description: "Lang och bred strand i norra Torrevieja som ofta lyfts av besokare. Bra strandpromenad, gott om plats och en enkel halvdagsutflykt fran Mil Palmeras.",
+      address: "Playa de La Mata, Torrevieja",
+      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/Playa_de_La_Mata_%28Torrevieja%29.jpg/1920px-Playa_de_La_Mata_%28Torrevieja%29.jpg",
+      mapUrl: "https://maps.google.com/?q=Playa+de+La+Mata+Torrevieja",
+      priceLevel: 1,
+      familyFriendly: true,
+      bestTimeToVisit: "Morgon",
+      carRequired: true,
+    },
+    {
+      category: "EXCURSION" as const,
+      title: "Parque Natural de las Lagunas de La Mata y Torrevieja",
+      description: "Naturparken runt lagunerna passar perfekt for promenader och fagelskadning. Sarskilt fint tidig morgon nar temperaturen ar lagre.",
+      address: "Parque Natural de las Lagunas de La Mata y Torrevieja",
+      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Laguna_Salada_de_Torrevieja_-_52451565734.jpg/1920px-Laguna_Salada_de_Torrevieja_-_52451565734.jpg",
+      mapUrl: "https://maps.google.com/?q=Parque+Natural+de+las+Lagunas+de+La+Mata+y+Torrevieja",
+      priceLevel: 1,
+      familyFriendly: true,
+      bestTimeToVisit: "Tidigt på morgonen",
+      carRequired: true,
     },
     {
       category: "EXCURSION" as const,
@@ -69,6 +145,10 @@ async function main() {
       address: "Guardamar del Segura, Alicante",
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/R%C3%A1bita_Califal.JPG/1920px-R%C3%A1bita_Califal.JPG",
       mapUrl: "https://maps.google.com/?q=Guardamar+del+Segura+dunas",
+      priceLevel: 1,
+      familyFriendly: true,
+      bestTimeToVisit: "Eftermiddag",
+      carRequired: true,
     },
     {
       category: "EXCURSION" as const,
@@ -77,6 +157,10 @@ async function main() {
       address: "Castillo de Santa Bárbara, Alicante",
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Castillo_de_Santa_B%C3%A1rbara%2C_Alicante%2C_Espa%C3%B1a%2C_2014-07-04%2C_DD_61.JPG/1920px-Castillo_de_Santa_B%C3%A1rbara%2C_Alicante%2C_Espa%C3%B1a%2C_2014-07-04%2C_DD_61.JPG",
       mapUrl: "https://maps.google.com/?q=Castillo+Santa+Barbara+Alicante",
+      priceLevel: 1,
+      familyFriendly: true,
+      bestTimeToVisit: "Eftermiddag",
+      carRequired: true,
     },
     {
       category: "MARKET" as const,
@@ -85,6 +169,10 @@ async function main() {
       address: "Avenida de las Cortes Valencianas, Torrevieja",
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/0/0c/Torrevieja_-_Mercado_Central_%27La_Plasa%27_3.jpg",
       mapUrl: "https://maps.google.com/?q=Mercado+Torrevieja+viernes",
+      priceLevel: 1,
+      familyFriendly: true,
+      bestTimeToVisit: "Förmiddag",
+      carRequired: true,
     },
     {
       category: "MARKET" as const,
@@ -94,6 +182,10 @@ async function main() {
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/La_Zenia_Boulevard_%2849287363646%29.jpg/1920px-La_Zenia_Boulevard_%2849287363646%29.jpg",
       mapUrl: "https://maps.google.com/?q=La+Zenia+Boulevard",
       website: "https://www.lazeniaboulevardonline.com",
+      priceLevel: 2,
+      familyFriendly: true,
+      bestTimeToVisit: "Kväll",
+      carRequired: true,
     },
     {
       category: "EVENT" as const,
@@ -101,6 +193,10 @@ async function main() {
       description: "Natten till 24 juni tänds jättebål på alla stränder i Spanien till midsommarfirandet Sant Joan / San Juan. Eldverk, musik och folk som hoppar över elden vid midnatt. Inte att missa!",
       address: "Playa de Mil Palmeras & Torre de la Horadada",
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Estado_de_la_playa_del_Orz%C3%A1n_despu%C3%A9s_de_la_noche_de_San_Juan_-_A_Coru%C3%B1a%2C_Galicia%2C_Spain_-_24_June_2010.jpg/1920px-Estado_de_la_playa_del_Orz%C3%A1n_despu%C3%A9s_de_la_noche_de_San_Juan_-_A_Coru%C3%B1a%2C_Galicia%2C_Spain_-_24_June_2010.jpg",
+      priceLevel: 1,
+      familyFriendly: false,
+      bestTimeToVisit: "Natt (23-01)",
+      carRequired: false,
     },
     {
       category: "OTHER" as const,
@@ -109,6 +205,10 @@ async function main() {
       address: "Torre de la Horadada, Pilar de la Horadada",
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Club_n%C3%A1utico_de_Torre_de_la_Horadada_3.jpg/1920px-Club_n%C3%A1utico_de_Torre_de_la_Horadada_3.jpg",
       mapUrl: "https://maps.google.com/?q=Torre+de+la+Horadada+watchtower",
+      priceLevel: 1,
+      familyFriendly: true,
+      bestTimeToVisit: "Sen eftermiddag",
+      carRequired: false,
     },
     {
       category: "OTHER" as const,
@@ -116,11 +216,20 @@ async function main() {
       description: "På norra delen av vår strand finns rester av en romersk stentäkt från antiken – en fascinerande historisk kuriositet alldeles intill sanden. Den romerska bosättningen Thiar låg här längs Via Augusta.",
       address: "Playa de Mil Palmeras (norra delen), Pilar de la Horadada",
       imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Sea_Time_%2824023423%29.jpeg/1920px-Sea_Time_%2824023423%29.jpeg",
+      priceLevel: 1,
+      familyFriendly: true,
+      bestTimeToVisit: "Eftermiddag",
+      carRequired: false,
     },
   ];
 
   for (const tip of tips) {
-    await prisma.tip.create({ data: tip });
+    const existing = await prisma.tip.findFirst({ where: { title: tip.title } });
+    if (existing) {
+      await prisma.tip.update({ where: { id: existing.id }, data: tip });
+    } else {
+      await prisma.tip.create({ data: tip });
+    }
   }
   console.log(`✅ ${tips.length} tips skapade`);
 

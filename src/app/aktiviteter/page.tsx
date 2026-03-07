@@ -22,6 +22,10 @@ interface Tip {
   userVoted?: boolean;
   openMonths?: number[];
   seasonNote?: string;
+  priceLevel?: number | null;
+  familyFriendly?: boolean | null;
+  bestTimeToVisit?: string | null;
+  carRequired?: boolean | null;
 }
 
 const CATEGORIES = ["RESTAURANT", "EXCURSION", "MARKET", "EVENT", "OTHER"] as const;
@@ -38,6 +42,18 @@ const categoryEmoji: Record<string, string> = {
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
+
+const TRIPADVISOR_INSPIRED_TITLES = new Set([
+  "Playa de La Mata",
+  "Parque Natural de las Lagunas de La Mata y Torrevieja",
+  "El Meson De La Costa",
+  "Bodegon Riojano",
+  "Restaurante Vela Centro",
+]);
+
+function isTripadvisorInspiredTip(tip: Tip) {
+  return TRIPADVISOR_INSPIRED_TITLES.has(tip.title);
+}
 
 function TipModal({
   tip,
@@ -58,11 +74,15 @@ function TipModal({
     mapUrl: tip?.mapUrl ?? "",
     openMonths: tip?.openMonths ?? [] as number[],
     seasonNote: tip?.seasonNote ?? "",
+    priceLevel: tip?.priceLevel ?? 2,
+    familyFriendly: tip?.familyFriendly ?? false,
+    bestTimeToVisit: tip?.bestTimeToVisit ?? "",
+    carRequired: tip?.carRequired ?? false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const isEdit = Boolean(tip?.id && !tip.id.startsWith("s"));
+  const isEdit = Boolean(tip?.id);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -159,6 +179,63 @@ function TipModal({
           <Input id="seasonNote" label="Säsongsnotering" value={form.seasonNote}
             onChange={(e) => setForm((f) => ({ ...f, seasonNote: e.target.value }))} placeholder="T.ex. Stängt november–mars" />
 
+          {/* Snabbfakta */}
+          <div className="rounded-xl border border-stone-200 p-3 bg-stone-50/60">
+            <p className="text-sm font-semibold text-stone-700 mb-2">Snabbfakta</p>
+            <div>
+              <label className="text-xs font-semibold text-stone-600 block mb-1.5">Prisnivå</label>
+              <div className="flex gap-2">
+                {[1, 2, 3].map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, priceLevel: level }))}
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
+                      form.priceLevel === level
+                        ? "bg-forest-700 text-white"
+                        : "bg-white text-stone-600 border border-stone-200 hover:bg-forest-50"
+                    }`}
+                  >
+                    {"€".repeat(level)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Input
+              id="bestTimeToVisit"
+              label="Bäst tid på dagen"
+              value={form.bestTimeToVisit}
+              onChange={(e) => setForm((f) => ({ ...f, bestTimeToVisit: e.target.value }))}
+              placeholder="T.ex. kväll / tidig morgon"
+            />
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, familyFriendly: !f.familyFriendly }))}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  form.familyFriendly
+                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                    : "bg-white text-stone-600 border border-stone-200 hover:bg-stone-100"
+                }`}
+              >
+                {form.familyFriendly ? "Barnvänligt: Ja" : "Barnvänligt: Nej"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, carRequired: !f.carRequired }))}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  form.carRequired
+                    ? "bg-amber-100 text-amber-800 border border-amber-200"
+                    : "bg-white text-stone-600 border border-stone-200 hover:bg-stone-100"
+                }`}
+              >
+                {form.carRequired ? "Bil krävs: Ja" : "Bil krävs: Nej"}
+              </button>
+            </div>
+          </div>
+
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
           <div className="flex gap-3 pt-1">
@@ -210,7 +287,33 @@ function TipDetailsModal({ tip, onClose }: { tip: Tip; onClose: () => void }) {
 
           <p className="mt-4 text-stone-700 leading-relaxed whitespace-pre-wrap">{tip.description}</p>
 
+          {isTripadvisorInspiredTip(tip) && (
+            <p className="mt-3 inline-flex items-center rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+              Källa: Tripadvisor-inspirerat tips
+            </p>
+          )}
+
           <div className="mt-5 space-y-2">
+            {tip.priceLevel && (
+              <p className="text-sm text-stone-500 inline-flex items-center gap-2">
+                Prisnivå: {"€".repeat(tip.priceLevel)}
+              </p>
+            )}
+            {typeof tip.familyFriendly === "boolean" && (
+              <p className="text-sm text-stone-500 inline-flex items-center gap-2">
+                Barnvänligt: {tip.familyFriendly ? "Ja" : "Nej"}
+              </p>
+            )}
+            {tip.bestTimeToVisit && (
+              <p className="text-sm text-stone-500 inline-flex items-center gap-2">
+                Bäst tid: {tip.bestTimeToVisit}
+              </p>
+            )}
+            {typeof tip.carRequired === "boolean" && (
+              <p className="text-sm text-stone-500 inline-flex items-center gap-2">
+                Bil krävs: {tip.carRequired ? "Ja" : "Nej"}
+              </p>
+            )}
             {tip.seasonNote && (
               <p className="text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2 inline-flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
@@ -331,7 +434,7 @@ export default function AktiviteterPage() {
   }
 
   const currentMonth = new Date().getMonth() + 1;
-  const filtered = tips.filter((t) => {
+  const displayTips = tips.filter((t) => {
     const categoryOk = filter === "ALL" || t.category === filter;
     const favoriteOk = !favoritesOnly || Boolean(t.userVoted);
     const seasonOk =
@@ -341,21 +444,6 @@ export default function AktiviteterPage() {
       t.openMonths.includes(currentMonth);
     return categoryOk && favoriteOk && seasonOk;
   });
-
-  const sampleTips: Tip[] = [
-    { id: "s1", category: "RESTAURANT", title: "El Varadero – Torre de la Horadada", description: "Topprestaurang i den charmiga fiskehamnen Torre de la Horadada, 2 km norrut. Perfekt friterad fisk och arroz caldoso.", address: "Puerto de Torre de la Horadada", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Puerto_deportivo_Torre_Horadada.jpg" },
-    { id: "s2", category: "RESTAURANT", title: "Chiringuitos på Playa Mil Palmeras", description: "Strandbarerna längs vår strand serverar bocadillos, grillad fisk och kalla drycker. Perfekt lunch med fötterna i sanden.", address: "Playa de Mil Palmeras", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Playa_de_las_Mil_Palmeras_%28Alicante%29.jpg/1920px-Playa_de_las_Mil_Palmeras_%28Alicante%29.jpg" },
-    { id: "s3", category: "EXCURSION", title: "Lo Pagán – Gyttjebad & flamingos", description: "Bara 8 km söderut kan du bada i terapeutisk saltgyttja vid Mar Menors strand. Flamingor och naturpark. Gratis!", address: "Lo Pagán, San Pedro del Pinatar", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Vista_a%C3%A9rea_del_puerto_deportivo_de_Lo_Pag%C3%A1n_01.jpg/1920px-Vista_a%C3%A9rea_del_puerto_deportivo_de_Lo_Pag%C3%A1n_01.jpg" },
-    { id: "s4", category: "EXCURSION", title: "Torrevieja – Rosa saltsjöar", description: "15 km norrut. Europas vackraste rosa saltsjöar med flamingor och naturpark. Glöm inte havspromenaden!", address: "Torrevieja, Alicante", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Laguna_Salada_de_Torrevieja_-_52451565734.jpg/1920px-Laguna_Salada_de_Torrevieja_-_52451565734.jpg" },
-    { id: "s5", category: "EXCURSION", title: "Alicante – Slottet Santa Bárbara", description: "66 km norrut. Renässansslott med panoramautsikt och gamla stan El Barrio.", address: "Castillo de Santa Bárbara, Alicante", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Castillo_de_Santa_B%C3%A1rbara%2C_Alicante%2C_Espa%C3%B1a%2C_2014-07-04%2C_DD_61.JPG/1920px-Castillo_de_Santa_B%C3%A1rbara%2C_Alicante%2C_Espa%C3%B1a%2C_2014-07-04%2C_DD_61.JPG" },
-    { id: "s6", category: "MARKET", title: "Torreviejas fredagsmarknad", description: "En av Costa Blancas största marknader varje fredag 09–14. Kläder, delikatesser och hantverk.", address: "Torrevieja", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/0/0c/Torrevieja_-_Mercado_Central_%27La_Plasa%27_3.jpg" },
-    { id: "s7", category: "MARKET", title: "La Zenia Boulevard", description: "Stort utomhusshopping 10 km norrut. Zara, H&M, restauranger och bio. Öppet till 22:00.", address: "Orihuela Costa", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/La_Zenia_Boulevard_%2849287363646%29.jpg/1920px-La_Zenia_Boulevard_%2849287363646%29.jpg" },
-    { id: "s8", category: "EVENT", title: "Midsommarfirande – San Juan", description: "Natten till 24 juni tänds jättebål längs hela kusten. Eldverk och folk som hoppar över elden. Magiskt!", address: "Playa de Mil Palmeras", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Estado_de_la_playa_del_Orz%C3%A1n_despu%C3%A9s_de_la_noche_de_San_Juan_-_A_Coru%C3%B1a%2C_Galicia%2C_Spain_-_24_June_2010.jpg/1920px-Estado_de_la_playa_del_Orz%C3%A1n_despu%C3%A9s_de_la_noche_de_San_Juan_-_A_Coru%C3%B1a%2C_Galicia%2C_Spain_-_24_June_2010.jpg" },
-    { id: "s9", category: "OTHER", title: "Torre de la Horadada – Vakttorn (1591)", description: "Medeltida vakttorn byggt mot pirater. Charmig hamnpromenad med glass och utsikt.", address: "Torre de la Horadada", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Club_n%C3%A1utico_de_Torre_de_la_Horadada_3.jpg/1920px-Club_n%C3%A1utico_de_Torre_de_la_Horadada_3.jpg" },
-    { id: "s10", category: "OTHER", title: "Romersk stentäkt – Playa Mil Palmeras", description: "Rester av en romersk stentäkt från antiken — historia alldeles intill sanden!", address: "Playa de Mil Palmeras (norra delen)", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Sea_Time_%2824023423%29.jpeg/1920px-Sea_Time_%2824023423%29.jpeg" },
-  ];
-
-  const displayTips = tips.length > 0 ? filtered : sampleTips.filter((t) => filter === "ALL" || t.category === filter);
 
   return (
     <div className="pt-28 pb-20 min-h-screen bg-stone-50 px-6">
@@ -473,6 +561,35 @@ export default function AktiviteterPage() {
                     <Badge variant="category" className="shrink-0">{categoryLabel(tip.category)}</Badge>
                   </div>
                   <p className="text-stone-500 text-sm leading-relaxed line-clamp-3 mb-3">{tip.description}</p>
+                  {isTripadvisorInspiredTip(tip) && (
+                    <p className="mb-3 inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+                      Källa: Tripadvisor
+                    </p>
+                  )}
+                  {(tip.priceLevel || typeof tip.familyFriendly === "boolean" || tip.bestTimeToVisit || typeof tip.carRequired === "boolean") && (
+                    <div className="mb-3 flex flex-wrap gap-1.5">
+                      {tip.priceLevel && (
+                        <span className="inline-flex items-center rounded-full bg-stone-100 px-2 py-1 text-[11px] font-semibold text-stone-600">
+                          {"€".repeat(tip.priceLevel)}
+                        </span>
+                      )}
+                      {typeof tip.familyFriendly === "boolean" && (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                          {tip.familyFriendly ? "Barnvänligt" : "Ej barnvänligt"}
+                        </span>
+                      )}
+                      {tip.bestTimeToVisit && (
+                        <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
+                          {tip.bestTimeToVisit}
+                        </span>
+                      )}
+                      {typeof tip.carRequired === "boolean" && (
+                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
+                          {tip.carRequired ? "Bil krävs" : "Ingen bil krävs"}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex flex-col gap-1.5">
                     {tip.seasonNote && (
                       <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1">
@@ -508,28 +625,26 @@ export default function AktiviteterPage() {
                     )}
                   </div>
                   {/* Vote button */}
-                  {!tip.id.startsWith("s") && (
-                    <div className="mt-3 pt-3 border-t border-stone-100 flex justify-end">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleVote(tip);
-                        }}
-                        disabled={!isLoggedIn}
-                        title={isLoggedIn ? (tip.userVoted ? "Ta bort gillning" : "Gilla detta tips") : "Logga in för att gilla"}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                          tip.userVoted
-                            ? "bg-red-50 text-red-600 border border-red-200"
-                            : isLoggedIn
-                            ? "bg-stone-50 text-stone-400 border border-stone-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
-                            : "bg-stone-50 text-stone-300 border border-stone-200 cursor-default"
-                        }`}
-                      >
-                        <Heart className={`w-3.5 h-3.5 ${tip.userVoted ? "fill-current" : ""}`} />
-                        {tip.voteCount ?? 0}
-                      </button>
-                    </div>
-                  )}
+                  <div className="mt-3 pt-3 border-t border-stone-100 flex justify-end">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleVote(tip);
+                      }}
+                      disabled={!isLoggedIn}
+                      title={isLoggedIn ? (tip.userVoted ? "Ta bort gillning" : "Gilla detta tips") : "Logga in för att gilla"}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        tip.userVoted
+                          ? "bg-red-50 text-red-600 border border-red-200"
+                          : isLoggedIn
+                          ? "bg-stone-50 text-stone-400 border border-stone-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
+                          : "bg-stone-50 text-stone-300 border border-stone-200 cursor-default"
+                      }`}
+                    >
+                      <Heart className={`w-3.5 h-3.5 ${tip.userVoted ? "fill-current" : ""}`} />
+                      {tip.voteCount ?? 0}
+                    </button>
+                  </div>
                 </CardBody>
               </Card>
             ))}
@@ -545,12 +660,6 @@ export default function AktiviteterPage() {
               </button>
             )}
           </div>
-        )}
-
-        {tips.length === 0 && !loading && (
-          <p className="text-center text-xs text-sand-500 mt-8">
-            ✨ Exempeltips visas — logga in för att lägga till riktiga tips
-          </p>
         )}
       </div>
     </div>
