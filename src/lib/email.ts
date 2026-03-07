@@ -1,6 +1,15 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | null = null;
+
+function getResendClient() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return null;
+  if (!resendClient) {
+    resendClient = new Resend(apiKey);
+  }
+  return resendClient;
+}
 
 const FROM = process.env.EMAIL_FROM ?? "noreply@torbe.se";
 const ADMIN_EMAILS = (process.env.ADMIN_EMAIL ?? "")
@@ -31,7 +40,8 @@ a.btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#8b7355;
 }
 
 async function send(to: string, subject: string, html: string) {
-  if (!to || !process.env.RESEND_API_KEY) {
+  const resend = getResendClient();
+  if (!to || !resend) {
     console.warn(`E-post ej skickad till "${to}" – RESEND_API_KEY saknas`);
     return;
   }
