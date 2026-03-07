@@ -5,6 +5,8 @@ import { HeroBookingWidget } from "@/components/HeroBookingWidget";
 import { WeatherWidget } from "@/components/WeatherWidget";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 const features = [
   { icon: Wifi, label: "Wi-Fi 100 Mbps" },
   { icon: Key, label: "Self Check-in" },

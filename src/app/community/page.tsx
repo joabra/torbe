@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { CommunityClient } from "@/components/CommunityClient";
 import { getPollArchive, type PollArchiveMonth } from "@/lib/community";
 
+export const dynamic = "force-dynamic";
+
 type LeaderboardResponse = {
   month: string;
   topTips: Array<{
