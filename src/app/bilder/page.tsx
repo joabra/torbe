@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { ExternalLink, Instagram, Link2, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronDown, ExternalLink, Instagram, Link2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
@@ -43,6 +43,16 @@ export default function BilderPage() {
   const [caption, setCaption] = useState("");
   const [savingLink, setSavingLink] = useState(false);
   const [linkError, setLinkError] = useState("");
+  const [uploadCaption, setUploadCaption] = useState("");
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [uploadPanelOpen, setUploadPanelOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function isVideoUrl(url: string) {
+    const cleanUrl = url.split("?")[0].toLowerCase();
+    return [".mp4", ".webm", ".mov", ".m4v", ".ogg"].some((ext) => cleanUrl.endsWith(ext));
+  }
 
   async function load() {
     setLoading(true);
@@ -105,6 +115,52 @@ export default function BilderPage() {
     setSavingLink(false);
   }
 
+  async function handleUploadMedia(e: React.FormEvent) {
+    e.preventDefault();
+    setUploadError("");
+
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) {
+      setUploadError("Valj en fil att ladda upp");
+      return;
+    }
+
+    setUploadingMedia(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("folder", "photos");
+
+    const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
+    const uploadData = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok || !uploadData.url) {
+      setUploadError(uploadData.error ?? "Kunde inte ladda upp filen");
+      setUploadingMedia(false);
+      return;
+    }
+
+    const saveRes = await fetch("/api/photos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: uploadData.url,
+        caption: uploadCaption.trim() || undefined,
+      }),
+    });
+
+    if (!saveRes.ok) {
+      const data = await saveRes.json().catch(() => ({}));
+      setUploadError(data.error ?? "Kunde inte spara media");
+      setUploadingMedia(false);
+      return;
+    }
+
+    const created = await saveRes.json();
+    setPhotos((prev) => [created, ...prev]);
+    setUploadCaption("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setUploadingMedia(false);
+  }
+
   return (
     <div className="pt-28 pb-20 min-h-screen bg-stone-50 px-6">
       <div className="max-w-5xl mx-auto">
@@ -126,60 +182,94 @@ export default function BilderPage() {
           </button>
         </div>
 
-        {/* Instagram tag reminder */}
-        <div className="bg-gradient-to-r from-forest-50 to-sand-100 rounded-2xl border border-sand-200 p-6 mb-10 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center shrink-0">
-            <Instagram className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <p className="font-bold text-forest-900">Dela dina minnen enkelt</p>
-            <p className="text-sm text-stone-500 mt-0.5">
-              Ladda upp bilder via era bokningar och/eller klistra in länk till ett Instagram-inlägg.
-            </p>
-          </div>
-        </div>
-
-        {session && (
-          <div className="mb-12 rounded-2xl border border-stone-200 bg-white p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Link2 className="w-4 h-4 text-forest-700" />
-              <h2 className="text-lg font-semibold text-forest-800">Lägg till Instagram-länk</h2>
-            </div>
-            <form onSubmit={handleAddLink} className="grid gap-3 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <Input
-                  value={permalink}
-                  onChange={(e) => setPermalink(e.target.value)}
-                  label="Instagram-länk"
-                  placeholder="https://www.instagram.com/p/..."
-                  required
-                />
+        {session ? (
+          <div className="mb-10 rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
+            <button
+              type="button"
+              onClick={() => setUploadPanelOpen((v) => !v)}
+              className="w-full flex items-center justify-between gap-3 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <Upload className="w-4 h-4 text-forest-700" />
+                <span className="text-base sm:text-lg font-semibold text-forest-800">Ladda upp och dela</span>
               </div>
-              <Input
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                label="Bild-URL (valfritt)"
-                placeholder="https://...jpg"
-              />
-              <Input
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                label="Bildtext (valfritt)"
-                placeholder="Kort beskrivning"
-                maxLength={300}
-              />
-              <div className="md:col-span-2 flex items-center justify-between gap-3">
-                <p className="text-xs text-stone-400">Tips: oppna Instagram-inlagget och kopiera lanken.</p>
-                <Button type="submit" size="sm" variant="sand" disabled={savingLink || !permalink.trim()}>
-                  {savingLink ? "Sparar..." : "Spara lank"}
-                </Button>
-              </div>
-              {linkError && <p className="md:col-span-2 text-sm text-red-600">{linkError}</p>}
-            </form>
-          </div>
-        )}
+              <ChevronDown className={`w-4 h-4 text-stone-500 transition-transform ${uploadPanelOpen ? "rotate-180" : ""}`} />
+            </button>
+            <p className="mt-1 text-xs sm:text-sm text-stone-500">Ladda upp bilder/videos eller lägg till Instagram-länk.</p>
 
-        {!session && (
+            {uploadPanelOpen && (
+              <div className="mt-4 pt-4 border-t border-stone-100 space-y-8">
+                <section>
+                  <h2 className="text-lg font-semibold text-forest-800 mb-4">Ladda upp bild eller video</h2>
+                  <form onSubmit={handleUploadMedia} className="grid gap-3 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-stone-700 mb-1">Fil</label>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*,video/*"
+                        className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 file:mr-4 file:rounded-lg file:border-0 file:bg-forest-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-forest-700 hover:file:bg-forest-100"
+                        required
+                      />
+                    </div>
+                    <Input
+                      value={uploadCaption}
+                      onChange={(e) => setUploadCaption(e.target.value)}
+                      label="Bildtext (valfritt)"
+                      placeholder="Kort beskrivning"
+                      maxLength={300}
+                    />
+                    <div className="flex items-end justify-end">
+                      <Button type="submit" size="sm" variant="sand" disabled={uploadingMedia}>
+                        {uploadingMedia ? "Laddar upp..." : "Ladda upp"}
+                      </Button>
+                    </div>
+                    <p className="md:col-span-2 text-xs text-stone-400">Fungerar utan bokning. Tillatna format: bilder och MP4/WEBM/MOV.</p>
+                    {uploadError && <p className="md:col-span-2 text-sm text-red-600">{uploadError}</p>}
+                  </form>
+                </section>
+
+                <section>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Link2 className="w-4 h-4 text-forest-700" />
+                    <h2 className="text-lg font-semibold text-forest-800">Lägg till Instagram-länk</h2>
+                  </div>
+                  <form onSubmit={handleAddLink} className="grid gap-3 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <Input
+                        value={permalink}
+                        onChange={(e) => setPermalink(e.target.value)}
+                        label="Instagram-länk"
+                        placeholder="https://www.instagram.com/p/..."
+                        required
+                      />
+                    </div>
+                    <Input
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      label="Bild-URL (valfritt)"
+                      placeholder="https://...jpg"
+                    />
+                    <Input
+                      value={caption}
+                      onChange={(e) => setCaption(e.target.value)}
+                      label="Bildtext (valfritt)"
+                      placeholder="Kort beskrivning"
+                      maxLength={300}
+                    />
+                    <div className="md:col-span-2 flex items-center justify-between gap-3">
+                      <p className="text-xs text-stone-400">Tips: oppna Instagram-inlagget och kopiera lanken.</p>
+                      <Button type="submit" size="sm" variant="sand" disabled={savingLink || !permalink.trim()}>
+                        {savingLink ? "Sparar..." : "Spara lank"}
+                      </Button>
+                    </div>
+                    {linkError && <p className="md:col-span-2 text-sm text-red-600">{linkError}</p>}
+                  </form>
+                </section>
+              </div>
+            )}
+          </div>
+        ) : (
           <div className="mb-12 rounded-2xl border border-stone-200 bg-white p-5 text-sm text-stone-600">
             <a href="/logga-in" className="text-forest-700 font-medium hover:underline">Logga in</a> for att lagga till Instagram-lankar.
           </div>
@@ -236,7 +326,7 @@ export default function BilderPage() {
         {photos.length > 0 && (
           <div className="mb-12">
             <h2 className="text-xl font-bold text-forest-800 mb-6 flex items-center gap-2">
-              Bilder fran era vistelser
+              Bilder och videos
             </h2>
             {(() => {
               const groups: PhotoGroup[] = [];
@@ -264,12 +354,22 @@ export default function BilderPage() {
                       const canDelete = role === "ADMIN" || photo.user?.id === userId;
                       return (
                         <div key={photo.id} className="relative break-inside-avoid group rounded-2xl overflow-hidden">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={photo.url}
-                            alt={photo.caption ?? "Vistelsebild"}
-                            className="w-full h-auto object-cover"
-                          />
+                          {isVideoUrl(photo.url) ? (
+                            <video
+                              src={photo.url}
+                              controls
+                              preload="metadata"
+                              playsInline
+                              className="w-full h-auto object-cover bg-black"
+                            />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={photo.url}
+                              alt={photo.caption ?? "Uppladdad bild"}
+                              className="w-full h-auto object-cover"
+                            />
+                          )}
                           {photo.caption && (
                             <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-3 py-2">
                               {photo.caption}
@@ -298,11 +398,7 @@ export default function BilderPage() {
                 </div>
               ));
             })()}
-            {session && (
-              <p className="text-xs text-stone-400 text-center mt-4">
-                Ladda upp egna bilder från <a href="/mina-bokningar" className="text-forest-600 hover:underline">Mina bokningar</a>
-              </p>
-            )}
+            {session && <p className="text-xs text-stone-400 text-center mt-4">Tips: du kan ladda upp media direkt ovanfor utan att koppla till bokning.</p>}
           </div>
         )}
 
@@ -317,7 +413,7 @@ export default function BilderPage() {
           <div className="mt-10 text-center bg-amber-50 border border-amber-200 rounded-2xl p-6">
             <p className="font-semibold text-amber-800">Inga bilder an</p>
             <p className="text-sm text-amber-700 mt-1">
-              Lagg till Instagram-lank manuellt eller ladda upp en bild via en bokning.
+              Lagg till Instagram-lank manuellt eller ladda upp bild/video direkt har.
             </p>
           </div>
         )}

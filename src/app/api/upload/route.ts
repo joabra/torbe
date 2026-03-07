@@ -17,13 +17,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ingen fil" }, { status: 400 });
   }
 
-  const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+    "video/ogg",
+  ];
   if (!allowedTypes.includes(file.type)) {
-    return NextResponse.json({ error: "Ogiltigt filformat. Tillåtna: JPG, PNG, WEBP, GIF" }, { status: 400 });
+    return NextResponse.json({ error: "Ogiltigt filformat. Tillatna: JPG, PNG, WEBP, GIF, MP4, WEBM, MOV, OGG" }, { status: 400 });
   }
 
-  if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: "Filen är för stor (max 10 MB)" }, { status: 400 });
+  if (file.size > 500 * 1024 * 1024) {
+    return NextResponse.json({ error: "Filen ar for stor (max 500 MB)" }, { status: 400 });
   }
 
   // Admins kan ladda upp till tips/, alla inloggade kan ladda upp till photos/

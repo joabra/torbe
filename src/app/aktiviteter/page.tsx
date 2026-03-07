@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { MapPin, Globe, Map, Plus, Pencil, Trash2, X, Heart, Calendar } from "lucide-react";
+import { MapPin, Globe, Map, Plus, Pencil, Trash2, X, Heart, Calendar, Navigation } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -173,6 +173,105 @@ function TipModal({
   );
 }
 
+function getDirectionsUrl(tip: Tip) {
+  const destination = tip.address?.trim() || tip.title.trim();
+  if (!destination) return null;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+}
+
+function TipDetailsModal({ tip, onClose }: { tip: Tip; onClose: () => void }) {
+  const directionsUrl = getDirectionsUrl(tip);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4" onClick={onClose}>
+      <div
+        className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {tip.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={tip.imageUrl} alt={tip.title} className="w-full h-56 object-cover" />
+        ) : (
+          <div className="h-56 bg-gradient-to-br from-forest-50 to-sand-100 flex items-center justify-center text-7xl">
+            {categoryEmoji[tip.category]}
+          </div>
+        )}
+
+        <div className="p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-bold text-forest-900">{tip.title}</h2>
+              <p className="mt-1 text-sm text-stone-500">{categoryLabel(tip.category)}</p>
+            </div>
+            <button onClick={onClose} className="text-stone-400 hover:text-stone-600" aria-label="Stang detaljvy">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <p className="mt-4 text-stone-700 leading-relaxed whitespace-pre-wrap">{tip.description}</p>
+
+          <div className="mt-5 space-y-2">
+            {tip.seasonNote && (
+              <p className="text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2 inline-flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                {tip.seasonNote}
+              </p>
+            )}
+            {tip.openMonths && tip.openMonths.length > 0 && tip.openMonths.length < 12 && (
+              <p className="text-sm text-stone-500 inline-flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Oppet: {tip.openMonths.map((m) => MONTHS[m - 1]).join(", ")}
+              </p>
+            )}
+            {tip.address && (
+              <p className="text-sm text-stone-600 inline-flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-sand-500" />
+                {tip.address}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            {directionsUrl && (
+              <a
+                href={directionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-forest-800 text-white text-sm font-semibold hover:bg-forest-900 transition-colors"
+              >
+                <Navigation className="w-4 h-4" />
+                Vagbeskrivning
+              </a>
+            )}
+            {tip.mapUrl && (
+              <a
+                href={tip.mapUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-stone-200 text-sm font-semibold text-forest-700 hover:bg-forest-50 transition-colors"
+              >
+                <Map className="w-4 h-4" />
+                Visa pa karta
+              </a>
+            )}
+            {tip.website && (
+              <a
+                href={tip.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-stone-200 text-sm font-semibold text-forest-700 hover:bg-forest-50 transition-colors"
+              >
+                <Globe className="w-4 h-4" />
+                Besok webbplats
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AktiviteterPage() {
   const { data: session } = useSession();
   const userId = (session?.user as { id?: string })?.id;
@@ -186,6 +285,7 @@ export default function AktiviteterPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editTip, setEditTip] = useState<Tip | undefined>();
+  const [detailTip, setDetailTip] = useState<Tip | null>(null);
 
   async function fetchTips() {
     const res = await fetch("/api/tips");
@@ -243,16 +343,16 @@ export default function AktiviteterPage() {
   });
 
   const sampleTips: Tip[] = [
-    { id: "s1", category: "RESTAURANT", title: "El Varadero – Torre de la Horadada", description: "Topprestaurang i den charmiga fiskehamnen Torre de la Horadada, 2 km norrut. Perfekt friterad fisk och arroz caldoso.", address: "Puerto de Torre de la Horadada", imageUrl: "/tips/restaurant.jpg" },
-    { id: "s2", category: "RESTAURANT", title: "Chiringuitos på Playa Mil Palmeras", description: "Strandbarerna längs vår strand serverar bocadillos, grillad fisk och kalla drycker. Perfekt lunch med fötterna i sanden.", address: "Playa de Mil Palmeras", imageUrl: "/tips/beach.jpg" },
-    { id: "s3", category: "EXCURSION", title: "Lo Pagán – Gyttjebad & flamingos", description: "Bara 8 km söderut kan du bada i terapeutisk saltgyttja vid Mar Menors strand. Flamingor och naturpark. Gratis!", address: "Lo Pagán, San Pedro del Pinatar", imageUrl: "/tips/saltlake.jpg" },
-    { id: "s4", category: "EXCURSION", title: "Torrevieja – Rosa saltsjöar", description: "15 km norrut. Europas vackraste rosa saltsjöar med flamingor och naturpark. Glöm inte havspromenaden!", address: "Torrevieja, Alicante", imageUrl: "/tips/saltlake.jpg" },
-    { id: "s5", category: "EXCURSION", title: "Alicante – Slottet Santa Bárbara", description: "66 km norrut. Renässansslott med panoramautsikt och gamla stan El Barrio.", address: "Castillo de Santa Bárbara, Alicante", imageUrl: "/tips/castle.jpg" },
-    { id: "s6", category: "MARKET", title: "Torreviejas fredagsmarknad", description: "En av Costa Blancas största marknader varje fredag 09–14. Kläder, delikatesser och hantverk.", address: "Torrevieja", imageUrl: "/tips/market.jpg" },
-    { id: "s7", category: "MARKET", title: "La Zenia Boulevard", description: "Stort utomhusshopping 10 km norrut. Zara, H&M, restauranger och bio. Öppet till 22:00.", address: "Orihuela Costa", imageUrl: "/tips/shopping.jpg" },
-    { id: "s8", category: "EVENT", title: "Midsommarfirande – San Juan", description: "Natten till 24 juni tänds jättebål längs hela kusten. Eldverk och folk som hoppar över elden. Magiskt!", address: "Playa de Mil Palmeras", imageUrl: "/tips/beach.jpg" },
-    { id: "s9", category: "OTHER", title: "Torre de la Horadada – Vakttorn (1591)", description: "Medeltida vakttorn byggt mot pirater. Charmig hamnpromenad med glass och utsikt.", address: "Torre de la Horadada", imageUrl: "/tips/castle.jpg" },
-    { id: "s10", category: "OTHER", title: "Romersk stentäkt – Playa Mil Palmeras", description: "Rester av en romersk stentäkt från antiken — historia alldeles intill sanden!", address: "Playa de Mil Palmeras (norra delen)", imageUrl: "/tips/beach.jpg" },
+    { id: "s1", category: "RESTAURANT", title: "El Varadero – Torre de la Horadada", description: "Topprestaurang i den charmiga fiskehamnen Torre de la Horadada, 2 km norrut. Perfekt friterad fisk och arroz caldoso.", address: "Puerto de Torre de la Horadada", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Puerto_deportivo_Torre_Horadada.jpg" },
+    { id: "s2", category: "RESTAURANT", title: "Chiringuitos på Playa Mil Palmeras", description: "Strandbarerna längs vår strand serverar bocadillos, grillad fisk och kalla drycker. Perfekt lunch med fötterna i sanden.", address: "Playa de Mil Palmeras", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Playa_de_las_Mil_Palmeras_%28Alicante%29.jpg/1920px-Playa_de_las_Mil_Palmeras_%28Alicante%29.jpg" },
+    { id: "s3", category: "EXCURSION", title: "Lo Pagán – Gyttjebad & flamingos", description: "Bara 8 km söderut kan du bada i terapeutisk saltgyttja vid Mar Menors strand. Flamingor och naturpark. Gratis!", address: "Lo Pagán, San Pedro del Pinatar", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Vista_a%C3%A9rea_del_puerto_deportivo_de_Lo_Pag%C3%A1n_01.jpg/1920px-Vista_a%C3%A9rea_del_puerto_deportivo_de_Lo_Pag%C3%A1n_01.jpg" },
+    { id: "s4", category: "EXCURSION", title: "Torrevieja – Rosa saltsjöar", description: "15 km norrut. Europas vackraste rosa saltsjöar med flamingor och naturpark. Glöm inte havspromenaden!", address: "Torrevieja, Alicante", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Laguna_Salada_de_Torrevieja_-_52451565734.jpg/1920px-Laguna_Salada_de_Torrevieja_-_52451565734.jpg" },
+    { id: "s5", category: "EXCURSION", title: "Alicante – Slottet Santa Bárbara", description: "66 km norrut. Renässansslott med panoramautsikt och gamla stan El Barrio.", address: "Castillo de Santa Bárbara, Alicante", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Castillo_de_Santa_B%C3%A1rbara%2C_Alicante%2C_Espa%C3%B1a%2C_2014-07-04%2C_DD_61.JPG/1920px-Castillo_de_Santa_B%C3%A1rbara%2C_Alicante%2C_Espa%C3%B1a%2C_2014-07-04%2C_DD_61.JPG" },
+    { id: "s6", category: "MARKET", title: "Torreviejas fredagsmarknad", description: "En av Costa Blancas största marknader varje fredag 09–14. Kläder, delikatesser och hantverk.", address: "Torrevieja", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/0/0c/Torrevieja_-_Mercado_Central_%27La_Plasa%27_3.jpg" },
+    { id: "s7", category: "MARKET", title: "La Zenia Boulevard", description: "Stort utomhusshopping 10 km norrut. Zara, H&M, restauranger och bio. Öppet till 22:00.", address: "Orihuela Costa", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/La_Zenia_Boulevard_%2849287363646%29.jpg/1920px-La_Zenia_Boulevard_%2849287363646%29.jpg" },
+    { id: "s8", category: "EVENT", title: "Midsommarfirande – San Juan", description: "Natten till 24 juni tänds jättebål längs hela kusten. Eldverk och folk som hoppar över elden. Magiskt!", address: "Playa de Mil Palmeras", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Estado_de_la_playa_del_Orz%C3%A1n_despu%C3%A9s_de_la_noche_de_San_Juan_-_A_Coru%C3%B1a%2C_Galicia%2C_Spain_-_24_June_2010.jpg/1920px-Estado_de_la_playa_del_Orz%C3%A1n_despu%C3%A9s_de_la_noche_de_San_Juan_-_A_Coru%C3%B1a%2C_Galicia%2C_Spain_-_24_June_2010.jpg" },
+    { id: "s9", category: "OTHER", title: "Torre de la Horadada – Vakttorn (1591)", description: "Medeltida vakttorn byggt mot pirater. Charmig hamnpromenad med glass och utsikt.", address: "Torre de la Horadada", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Club_n%C3%A1utico_de_Torre_de_la_Horadada_3.jpg/1920px-Club_n%C3%A1utico_de_Torre_de_la_Horadada_3.jpg" },
+    { id: "s10", category: "OTHER", title: "Romersk stentäkt – Playa Mil Palmeras", description: "Rester av en romersk stentäkt från antiken — historia alldeles intill sanden!", address: "Playa de Mil Palmeras (norra delen)", imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Sea_Time_%2824023423%29.jpeg/1920px-Sea_Time_%2824023423%29.jpeg" },
   ];
 
   const displayTips = tips.length > 0 ? filtered : sampleTips.filter((t) => filter === "ALL" || t.category === filter);
@@ -266,6 +366,7 @@ export default function AktiviteterPage() {
           onSaved={loadTips}
         />
       )}
+      {detailTip && <TipDetailsModal tip={detailTip} onClose={() => setDetailTip(null)} />}
 
       <div className="max-w-5xl mx-auto">
         {/* Header */}
@@ -327,18 +428,22 @@ export default function AktiviteterPage() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {displayTips.map((tip) => (
-              <Card key={tip.id} className="hover:shadow-md hover:-translate-y-0.5 transition-all">
+              <Card
+                key={tip.id}
+                className="hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+                onClick={() => setDetailTip(tip)}
+              >
                 {/* Card top */}
                 {tip.imageUrl ? (
                   <div className="h-36 overflow-hidden relative">
                     <img src={tip.imageUrl} alt={tip.title} className="w-full h-full object-cover" />
                     {canEdit(tip) && (
                       <div className="absolute top-2 right-2 flex gap-1">
-                        <button onClick={() => setEditTip(tip)}
+                        <button onClick={(e) => { e.stopPropagation(); setEditTip(tip); }}
                           className="bg-white/90 backdrop-blur rounded-lg p-1.5 text-forest-700 hover:bg-white shadow-sm">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => handleDelete(tip)}
+                        <button onClick={(e) => { e.stopPropagation(); handleDelete(tip); }}
                           className="bg-white/90 backdrop-blur rounded-lg p-1.5 text-red-600 hover:bg-white shadow-sm">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -350,11 +455,11 @@ export default function AktiviteterPage() {
                     {categoryEmoji[tip.category]}
                     {canEdit(tip) && (
                       <div className="absolute top-2 right-2 flex gap-1">
-                        <button onClick={() => setEditTip(tip)}
+                        <button onClick={(e) => { e.stopPropagation(); setEditTip(tip); }}
                           className="bg-white/90 backdrop-blur rounded-lg p-1.5 text-forest-700 hover:bg-white shadow-sm">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => handleDelete(tip)}
+                        <button onClick={(e) => { e.stopPropagation(); handleDelete(tip); }}
                           className="bg-white/90 backdrop-blur rounded-lg p-1.5 text-red-600 hover:bg-white shadow-sm">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -388,14 +493,14 @@ export default function AktiviteterPage() {
                       </div>
                     )}
                     {tip.mapUrl && (
-                      <a href={tip.mapUrl} target="_blank" rel="noopener noreferrer"
+                      <a href={tip.mapUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-1.5 text-xs text-forest-600 hover:text-forest-800 transition-colors">
                         <Map className="w-3.5 h-3.5 shrink-0" />
                         Visa på karta
                       </a>
                     )}
                     {tip.website && (
-                      <a href={tip.website} target="_blank" rel="noopener noreferrer"
+                      <a href={tip.website} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-1.5 text-xs text-forest-600 hover:text-forest-800 transition-colors">
                         <Globe className="w-3.5 h-3.5 shrink-0" />
                         Besök webbplats
@@ -406,7 +511,10 @@ export default function AktiviteterPage() {
                   {!tip.id.startsWith("s") && (
                     <div className="mt-3 pt-3 border-t border-stone-100 flex justify-end">
                       <button
-                        onClick={() => handleVote(tip)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleVote(tip);
+                        }}
                         disabled={!isLoggedIn}
                         title={isLoggedIn ? (tip.userVoted ? "Ta bort gillning" : "Gilla detta tips") : "Logga in för att gilla"}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${

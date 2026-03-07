@@ -10,12 +10,12 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { categoryLabel, formatDateShort } from "@/lib/utils";
 
 type LeaderboardResponse = {
-  month: string;
+  year: number;
   topTips: Array<{
     id: string;
     title: string;
     category: string;
-    votesThisMonth: number;
+    votesThisYear: number;
     createdBy: string | null;
   }>;
   topContributors: Array<{
@@ -48,9 +48,9 @@ type Poll = {
   options: Array<{ id: string; text: string; votes: number }>;
 };
 
-type PollArchiveMonth = {
-  monthKey: string;
-  monthLabel: string;
+type PollArchiveYear = {
+  yearKey: string;
+  yearLabel: string;
   polls: number;
   totalVotes: number;
   winners: Array<{
@@ -67,7 +67,7 @@ interface CommunityClientProps {
   initialLeaderboard: LeaderboardResponse;
   initialMessages: SupportMessage[];
   initialPolls: Poll[];
-  initialPollArchive: PollArchiveMonth[];
+  initialPollArchive: PollArchiveYear[];
 }
 
 export function CommunityClient({ initialLeaderboard, initialMessages, initialPolls, initialPollArchive }: CommunityClientProps) {
@@ -77,7 +77,7 @@ export function CommunityClient({ initialLeaderboard, initialMessages, initialPo
   const [leaderboard] = useState<LeaderboardResponse>(initialLeaderboard);
   const [messages, setMessages] = useState<SupportMessage[]>(initialMessages);
   const [polls, setPolls] = useState<Poll[]>(initialPolls);
-  const [pollArchive, setPollArchive] = useState<PollArchiveMonth[]>(initialPollArchive);
+  const [pollArchive, setPollArchive] = useState<PollArchiveYear[]>(initialPollArchive);
 
   const [supportDraft, setSupportDraft] = useState("");
   const [supportSending, setSupportSending] = useState(false);
@@ -92,10 +92,9 @@ export function CommunityClient({ initialLeaderboard, initialMessages, initialPo
   const [statusUpdatingPollId, setStatusUpdatingPollId] = useState<string | null>(null);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
 
-  const monthLabel = useMemo(() => {
-    if (!leaderboard?.month) return "denna månad";
-    const [year, month] = leaderboard.month.split("-").map(Number);
-    return new Date(year, month - 1, 1).toLocaleDateString("sv-SE", { month: "long", year: "numeric" });
+  const yearLabel = useMemo(() => {
+    if (!leaderboard?.year) return "detta ar";
+    return leaderboard.year.toString();
   }, [leaderboard]);
 
   async function refreshPolls() {
@@ -236,7 +235,7 @@ export function CommunityClient({ initialLeaderboard, initialMessages, initialPo
             <CardHeader className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-forest-800 font-semibold">
                 <Trophy className="w-4 h-4" />
-                Mest gillade tips ({monthLabel})
+                Mest gillade tips ({yearLabel})
               </div>
               <Link href="/aktiviteter" className="text-xs text-forest-700 hover:underline">Se alla tips</Link>
             </CardHeader>
@@ -246,13 +245,13 @@ export function CommunityClient({ initialLeaderboard, initialMessages, initialPo
                   <div key={tip.id} className="rounded-xl border border-stone-200 bg-white px-4 py-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-stone-800">#{idx + 1} {tip.title}</p>
-                      <p className="text-xs font-semibold text-forest-700">{tip.votesThisMonth} gillningar</p>
+                      <p className="text-xs font-semibold text-forest-700">{tip.votesThisYear} gillningar</p>
                     </div>
                     <p className="text-xs text-stone-500 mt-1">{categoryLabel(tip.category)}{tip.createdBy ? ` • av ${tip.createdBy}` : ""}</p>
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-stone-500">Inga röster ännu denna månad.</p>
+                <p className="text-sm text-stone-500">Inga röster ännu detta år.</p>
               )}
             </CardBody>
           </Card>
@@ -260,7 +259,7 @@ export function CommunityClient({ initialLeaderboard, initialMessages, initialPo
           <Card>
             <CardHeader className="flex items-center gap-2 text-forest-800 font-semibold">
               <BarChart3 className="w-4 h-4" />
-              Mest aktiva contributors ({monthLabel})
+              Mest aktiva contributors ({yearLabel})
             </CardHeader>
             <CardBody className="space-y-3">
               {leaderboard?.topContributors.length ? (
@@ -274,7 +273,7 @@ export function CommunityClient({ initialLeaderboard, initialMessages, initialPo
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-stone-500">Ingen aktivitet ännu denna månad.</p>
+                <p className="text-sm text-stone-500">Ingen aktivitet ännu detta år.</p>
               )}
             </CardBody>
           </Card>
@@ -452,20 +451,20 @@ export function CommunityClient({ initialLeaderboard, initialMessages, initialPo
           <Card>
             <CardHeader className="flex items-center gap-2 text-forest-800 font-semibold">
               <Trophy className="w-4 h-4" />
-              Poll-arkiv och vinnare per månad
+              Poll-arkiv och vinnare per år
             </CardHeader>
             <CardBody className="space-y-4">
               {pollArchive.length === 0 ? (
                 <p className="text-sm text-stone-500">Inga avslutade omröstningar ännu.</p>
               ) : (
-                pollArchive.map((month) => (
-                  <div key={month.monthKey} className="rounded-xl border border-stone-200 bg-white p-4">
+                pollArchive.map((year) => (
+                  <div key={year.yearKey} className="rounded-xl border border-stone-200 bg-white p-4">
                     <div className="flex items-center justify-between gap-2 mb-3">
-                      <p className="text-sm font-semibold text-stone-800">{month.monthLabel}</p>
-                      <p className="text-xs text-stone-500">{month.polls} polls • {month.totalVotes} röster</p>
+                      <p className="text-sm font-semibold text-stone-800">{year.yearLabel}</p>
+                      <p className="text-xs text-stone-500">{year.polls} polls • {year.totalVotes} röster</p>
                     </div>
                     <div className="space-y-2">
-                      {month.winners.map((winner) => (
+                      {year.winners.map((winner) => (
                         <div key={winner.pollId} className="rounded-lg border border-stone-100 bg-stone-50 px-3 py-2">
                           <p className="text-sm text-stone-800">{winner.question}</p>
                           <p className="text-xs text-stone-600 mt-1">

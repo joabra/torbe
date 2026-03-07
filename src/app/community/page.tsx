@@ -1,17 +1,17 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CommunityClient } from "@/components/CommunityClient";
-import { getPollArchive, type PollArchiveMonth } from "@/lib/community";
+import { getPollArchive, type PollArchiveYear } from "@/lib/community";
 
 export const dynamic = "force-dynamic";
 
 type LeaderboardResponse = {
-  month: string;
+  year: number;
   topTips: Array<{
     id: string;
     title: string;
     category: string;
-    votesThisMonth: number;
+    votesThisYear: number;
     createdBy: string | null;
   }>;
   topContributors: Array<{
@@ -46,12 +46,12 @@ type Poll = {
 
 async function getLeaderboard(): Promise<LeaderboardResponse> {
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const yearStart = new Date(now.getFullYear(), 0, 1);
 
-  const [monthlyTipVotes, contributorUsers] = await Promise.all([
+  const [yearlyTipVotes, contributorUsers] = await Promise.all([
     prisma.tipVote.groupBy({
       by: ["tipId"],
-      where: { createdAt: { gte: monthStart } },
+      where: { createdAt: { gte: yearStart } },
       _count: { tipId: true },
       orderBy: { _count: { tipId: "desc" } },
       take: 5,
@@ -59,30 +59,30 @@ async function getLeaderboard(): Promise<LeaderboardResponse> {
     prisma.user.findMany({
       where: {
         OR: [
-          { tips: { some: { createdAt: { gte: monthStart } } } },
-          { visitPhotos: { some: { createdAt: { gte: monthStart } } } },
-          { guestbookEntries: { some: { createdAt: { gte: monthStart } } } },
+          { tips: { some: { createdAt: { gte: yearStart } } } },
+          { visitPhotos: { some: { createdAt: { gte: yearStart } } } },
+          { guestbookEntries: { some: { createdAt: { gte: yearStart } } } },
         ],
       },
       select: {
         id: true,
         name: true,
-        tips: { where: { createdAt: { gte: monthStart } }, select: { id: true } },
-        visitPhotos: { where: { createdAt: { gte: monthStart } }, select: { id: true } },
-        guestbookEntries: { where: { createdAt: { gte: monthStart } }, select: { id: true } },
+        tips: { where: { createdAt: { gte: yearStart } }, select: { id: true } },
+        visitPhotos: { where: { createdAt: { gte: yearStart } }, select: { id: true } },
+        guestbookEntries: { where: { createdAt: { gte: yearStart } }, select: { id: true } },
       },
     }),
   ]);
 
-  const tips = monthlyTipVotes.length
+  const tips = yearlyTipVotes.length
     ? await prisma.tip.findMany({
-        where: { id: { in: monthlyTipVotes.map((v) => v.tipId) } },
+        where: { id: { in: yearlyTipVotes.map((v) => v.tipId) } },
         select: { id: true, title: true, category: true, createdBy: { select: { name: true } } },
       })
     : [];
 
   const tipMap = new Map(tips.map((t) => [t.id, t]));
-  const topTips = monthlyTipVotes
+  const topTips = yearlyTipVotes
     .map((voteRow) => {
       const tip = tipMap.get(voteRow.tipId);
       if (!tip) return null;
@@ -90,7 +90,7 @@ async function getLeaderboard(): Promise<LeaderboardResponse> {
         id: tip.id,
         title: tip.title,
         category: tip.category,
-        votesThisMonth: voteRow._count.tipId,
+        votesThisYear: voteRow._count.tipId,
         createdBy: tip.createdBy?.name ?? null,
       };
     })
@@ -115,7 +115,7 @@ async function getLeaderboard(): Promise<LeaderboardResponse> {
     .slice(0, 5);
 
   return {
-    month: `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}`,
+    year: now.getFullYear(),
     topTips,
     topContributors,
   };
@@ -186,7 +186,7 @@ export default async function CommunityPage() {
       initialLeaderboard={initialLeaderboard}
       initialMessages={initialMessages}
       initialPolls={initialPolls}
-      initialPollArchive={initialPollArchive as PollArchiveMonth[]}
+      initialPollArchive={initialPollArchive as PollArchiveYear[]}
     />
   );
 }
