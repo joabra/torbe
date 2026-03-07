@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_XikgULLvKUNJINrUMxXhC1nYdCnF",
+  "orgId": "team_vDTr3yd3vuAaWD4T28d8pIQC",
+  "projectName": "torbe",
+  "settings": {
+    "createdAt": 1772715564247,
+    "framework": "nextjs",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}
