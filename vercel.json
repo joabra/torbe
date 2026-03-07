@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/flight-watch",
-      "schedule": "0 * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
