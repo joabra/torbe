@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Wifi, PawPrint, Key, Star, MapPin, ChevronDown, CalendarDays } from "lucide-react";
+import { Wifi, PawPrint, Key, Star, MapPin, ChevronDown, CalendarDays, Trophy, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { HeroBookingWidget } from "@/components/HeroBookingWidget";
 import { WeatherWidget } from "@/components/WeatherWidget";
@@ -36,8 +36,128 @@ async function getApartmentStats() {
   };
 }
 
+type ActivityItem = {
+  id: string;
+  type: "tip" | "photo" | "guestbook";
+  title: string;
+  subtitle: string;
+  href: string;
+  createdAt: Date;
+};
+
+async function getRecentActivity(): Promise<ActivityItem[]> {
+  const [tips, photos, entries] = await Promise.all([
+    prisma.tip.findMany({
+      select: { id: true, title: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take: 4,
+    }),
+    prisma.visitPhoto.findMany({
+      select: { id: true, caption: true, createdAt: true, user: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 4,
+    }),
+    prisma.guestbookEntry.findMany({
+      select: { id: true, content: true, createdAt: true, author: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 4,
+    }),
+  ]);
+
+  const activity: ActivityItem[] = [
+    ...tips.map((t) => ({
+      id: `tip-${t.id}`,
+      type: "tip" as const,
+      title: "Nytt tips",
+      subtitle: t.title,
+      href: "/aktiviteter",
+      createdAt: t.createdAt,
+    })),
+    ...photos.map((p) => ({
+      id: `photo-${p.id}`,
+      type: "photo" as const,
+      title: "Ny bild uppladdad",
+      subtitle: p.caption?.trim() || `Av ${p.user?.name ?? "familjemedlem"}`,
+      href: "/bilder",
+      createdAt: p.createdAt,
+    })),
+    ...entries.map((e) => ({
+      id: `guestbook-${e.id}`,
+      type: "guestbook" as const,
+      title: "Nytt i gästboken",
+      subtitle: `${e.author?.name ?? "Anonym"}: ${e.content.slice(0, 60)}${e.content.length > 60 ? "..." : ""}`,
+      href: "/gastbok",
+      createdAt: e.createdAt,
+    })),
+  ];
+
+  return activity.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 6);
+}
+
+async function getLeaderboardHighlights() {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const [tipVotes, users] = await Promise.all([
+    prisma.tipVote.groupBy({
+      by: ["tipId"],
+      where: { createdAt: { gte: monthStart } },
+      _count: { tipId: true },
+      orderBy: { _count: { tipId: "desc" } },
+      take: 3,
+    }),
+    prisma.user.findMany({
+      where: {
+        OR: [
+          { tips: { some: { createdAt: { gte: monthStart } } } },
+          { visitPhotos: { some: { createdAt: { gte: monthStart } } } },
+          { guestbookEntries: { some: { createdAt: { gte: monthStart } } } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        tips: { where: { createdAt: { gte: monthStart } }, select: { id: true } },
+        visitPhotos: { where: { createdAt: { gte: monthStart } }, select: { id: true } },
+        guestbookEntries: { where: { createdAt: { gte: monthStart } }, select: { id: true } },
+      },
+    }),
+  ]);
+
+  const tips = tipVotes.length
+    ? await prisma.tip.findMany({
+        where: { id: { in: tipVotes.map((v) => v.tipId) } },
+        select: { id: true, title: true },
+      })
+    : [];
+
+  const tipMap = new Map(tips.map((t) => [t.id, t]));
+  const topTips = tipVotes
+    .map((v) => {
+      const tip = tipMap.get(v.tipId);
+      if (!tip) return null;
+      return { id: tip.id, title: tip.title, votes: v._count.tipId };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+  const topContributors = users
+    .map((u) => {
+      const total = u.tips.length + u.visitPhotos.length + u.guestbookEntries.length;
+      return { id: u.id, name: u.name, total };
+    })
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3);
+
+  return { topTips, topContributors };
+}
+
 export default async function HomePage() {
-  const [nextBooking, apt] = await Promise.all([getNextBookingInfo(), getApartmentStats()]);
+  const [nextBooking, apt, activity, leaderboard] = await Promise.all([
+    getNextBookingInfo(),
+    getApartmentStats(),
+    getRecentActivity(),
+    getLeaderboardHighlights(),
+  ]);
 
   return (
     <div>
@@ -172,13 +292,57 @@ export default async function HomePage() {
       {/* Quick links */}
       <section className="bg-forest-50 py-20 px-6">
         <div className="max-w-5xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-6 mb-10">
+            <div className="bg-white rounded-2xl border border-stone-100 p-6">
+              <div className="flex items-center gap-2 text-forest-800 font-semibold mb-3">
+                <Trophy className="w-4 h-4" />
+                Månadens mest gillade tips
+              </div>
+              {leaderboard.topTips.length === 0 ? (
+                <p className="text-sm text-stone-500">Inga röster ännu denna månad.</p>
+              ) : (
+                <div className="space-y-2">
+                  {leaderboard.topTips.map((tip, index) => (
+                    <div key={tip.id} className="text-sm text-stone-700 flex items-center justify-between gap-2">
+                      <span>#{index + 1} {tip.title}</span>
+                      <span className="text-xs font-semibold text-forest-700">{tip.votes} gillningar</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-stone-100 p-6">
+              <div className="flex items-center gap-2 text-forest-800 font-semibold mb-3">
+                <BarChart3 className="w-4 h-4" />
+                Mest aktiva familjemedlemmar
+              </div>
+              {leaderboard.topContributors.length === 0 ? (
+                <p className="text-sm text-stone-500">Ingen aktivitet ännu denna månad.</p>
+              ) : (
+                <div className="space-y-2">
+                  {leaderboard.topContributors.map((person, index) => (
+                    <div key={person.id} className="text-sm text-stone-700 flex items-center justify-between gap-2">
+                      <span>#{index + 1} {person.name}</span>
+                      <span className="text-xs font-semibold text-forest-700">{person.total} bidrag</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Link href="/community" className="inline-block mt-4 text-sm text-forest-700 hover:underline">
+                Gå till Gemenskap →
+              </Link>
+            </div>
+          </div>
+
           <h2 className="text-3xl font-bold text-forest-900 text-center mb-12">Allt du behöver</h2>
-          <div className="grid md:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
             {[
               { href: "/kalender", title: "Tillgänglighet", desc: "Se när lägenheten är ledig eller bokad av familjen.", icon: "📅" },
               { href: "/aktiviteter", title: "Aktiviteter & Tips", desc: "Restauranger, utflykter, marknader och event i närheten.", icon: "🌊" },
               { href: "/bilder", title: "Bildgalleri", desc: "Se bilder från familjens vistelser via Instagram.", icon: "📸" },
               { href: "/gastbok", title: "Gästbok", desc: "Läs och skriv minnen från familjens vistelser.", icon: "📖" },
+              { href: "/community", title: "Gemenskap", desc: "Topplistor, omröstningar och global fråga-admin-tråd.", icon: "🏆" },
             ].map((item) => (
               <Link
                 key={item.href}
@@ -191,6 +355,36 @@ export default async function HomePage() {
               </Link>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Activity feed */}
+      <section className="bg-white py-20 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-center justify-between gap-4 mb-8 flex-wrap">
+            <h2 className="text-3xl font-bold text-forest-900">Senast nytt</h2>
+            <p className="text-sm text-stone-500">Nya tips, bilder och hälsningar från familjen</p>
+          </div>
+
+          {activity.length === 0 ? (
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 px-6 py-8 text-stone-500">
+              Inga uppdateringar ännu.
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-4">
+              {activity.map((item) => (
+                <Link key={item.id} href={item.href} className="rounded-2xl border border-stone-200 bg-white px-5 py-4 hover:border-forest-200 hover:bg-forest-50/30 transition-colors">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-forest-800">
+                      {item.type === "tip" ? "💡" : item.type === "photo" ? "📸" : "📖"} {item.title}
+                    </p>
+                    <span className="text-xs text-stone-400">{new Date(item.createdAt).toLocaleDateString("sv-SE")}</span>
+                  </div>
+                  <p className="text-sm text-stone-600 mt-1 line-clamp-2">{item.subtitle}</p>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </div>

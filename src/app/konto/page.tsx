@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { KeyRound, ShieldCheck, ShieldOff, Copy, Check, AlertCircle, CheckCircle2 } from "lucide-react";
+import { KeyRound, ShieldCheck, ShieldOff, Copy, Check, AlertCircle, CheckCircle2, Bell } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -30,6 +30,18 @@ export default function KontoinstellningarPage() {
   const [mfaError, setMfaError] = useState("");
   const [mfaSuccess, setMfaSuccess] = useState("");
 
+  // In-app notifications
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    title: string;
+    body: string;
+    linkUrl: string | null;
+    isRead: boolean;
+    createdAt: string;
+  }>>([]);
+  const [notifUnreadCount, setNotifUnreadCount] = useState(0);
+  const [notifLoading, setNotifLoading] = useState(false);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/logga-in");
   }, [status, router]);
@@ -39,8 +51,41 @@ export default function KontoinstellningarPage() {
       fetch("/api/account/me")
         .then((r) => r.json())
         .then((data) => setMfaEnabled(data.mfaEnabled ?? false));
+
+      setNotifLoading(true);
+      fetch("/api/notifications")
+        .then((r) => (r.ok ? r.json() : { items: [], unreadCount: 0 }))
+        .then((data: { items?: Array<{ id: string; title: string; body: string; linkUrl: string | null; isRead: boolean; createdAt: string }>; unreadCount?: number }) => {
+          setNotifications(data.items ?? []);
+          setNotifUnreadCount(data.unreadCount ?? 0);
+        })
+        .finally(() => setNotifLoading(false));
     }
   }, [status]);
+
+  async function markNotificationRead(id: string) {
+    const res = await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+
+    if (!res.ok) return;
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    setNotifUnreadCount((prev) => Math.max(0, prev - 1));
+  }
+
+  async function markAllNotificationsRead() {
+    const res = await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markAll: true }),
+    });
+
+    if (!res.ok) return;
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setNotifUnreadCount(0);
+  }
 
   useEffect(() => {
     if (!mfaSecret || !session?.user?.email) return;
@@ -48,7 +93,7 @@ export default function KontoinstellningarPage() {
       const uri = `otpauth://totp/Torbe:${encodeURIComponent(session.user!.email!)}?secret=${mfaSecret}&issuer=Torbe`;
       QR.toDataURL(uri, { width: 200 }).then(setQrDataUrl);
     });
-  }, [mfaSecret, session?.user?.email]);
+  }, [mfaSecret, session?.user]);
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
@@ -139,6 +184,69 @@ export default function KontoinstellningarPage() {
           <span className="text-sand-500 text-sm font-semibold uppercase tracking-widest">Konto</span>
           <h1 className="mt-3 text-4xl font-bold text-forest-900">Inställningar</h1>
           <p className="mt-2 text-stone-500">Hantera lösenord och säkerhet för ditt konto.</p>
+        </div>
+
+        {/* ── Byt lösenord ── */}
+        <div id="notiser">
+          <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-forest-900 font-semibold">
+                <Bell className="w-4 h-4 text-sand-500" />
+                Notiser
+              </div>
+              <button
+                type="button"
+                onClick={markAllNotificationsRead}
+                disabled={notifUnreadCount === 0}
+                className="text-xs text-forest-700 hover:underline disabled:opacity-50"
+              >
+                Markera alla som lästa
+              </button>
+            </div>
+          </CardHeader>
+          <CardBody>
+            {notifLoading ? (
+              <p className="text-sm text-stone-500">Laddar notiser...</p>
+            ) : notifications.length === 0 ? (
+              <p className="text-sm text-stone-500">Inga notiser ännu.</p>
+            ) : (
+              <div className="space-y-2">
+                {notifications.map((notification) => (
+                  <div key={notification.id} className={`rounded-xl border px-3 py-2 ${notification.isRead ? "border-stone-200 bg-white" : "border-forest-200 bg-forest-50/40"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-stone-800">{notification.title}</p>
+                        <p className="text-sm text-stone-600 mt-1">{notification.body}</p>
+                        <p className="text-xs text-stone-400 mt-1">
+                          {new Date(notification.createdAt).toLocaleDateString("sv-SE", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </p>
+                        {notification.linkUrl && (
+                          <a href={notification.linkUrl} className="text-xs text-forest-700 hover:underline mt-1 inline-block">
+                            Öppna
+                          </a>
+                        )}
+                      </div>
+                      {!notification.isRead && (
+                        <button
+                          type="button"
+                          onClick={() => markNotificationRead(notification.id)}
+                          className="text-xs text-forest-700 hover:underline"
+                        >
+                          Markera läst
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardBody>
+          </Card>
         </div>
 
         {/* ── Byt lösenord ── */}
@@ -253,7 +361,7 @@ export default function KontoinstellningarPage() {
             {mfaStep === "setup" && (
               <div className="flex flex-col gap-4">
                 <ol className="text-sm text-stone-600 space-y-1 list-decimal list-inside">
-                  <li>Öppna din autentiseringsapp och välj <strong>"Lägg till konto"</strong></li>
+                  <li>Öppna din autentiseringsapp och välj <strong>&quot;Lägg till konto&quot;</strong></li>
                   <li>Skanna QR-koden nedan</li>
                   <li>Ange den 6-siffriga koden för att bekräfta</li>
                 </ol>

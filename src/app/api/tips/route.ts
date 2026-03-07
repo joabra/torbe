@@ -11,6 +11,8 @@ const schema = z.object({
   website: z.string().url().optional().or(z.literal("")),
   imageUrl: z.string().url().optional().or(z.literal("")),
   mapUrl: z.string().url().optional().or(z.literal("")),
+  openMonths: z.array(z.number().int().min(1).max(12)).optional(),
+  seasonNote: z.string().max(200).optional(),
 });
 
 export async function GET() {
@@ -20,7 +22,7 @@ export async function GET() {
 
     const tips = await prisma.tip.findMany({ orderBy: { createdAt: "desc" } });
 
-    let countMap: Record<string, number> = {};
+    const countMap: Record<string, number> = {};
     let votedSet = new Set<string>();
 
     try {

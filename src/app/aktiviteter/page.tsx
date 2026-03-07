@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { MapPin, Globe, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal, Plus, Pencil, Trash2, X, Heart } from "lucide-react";
+import { MapPin, Globe, Map, Plus, Pencil, Trash2, X, Heart, Calendar } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -20,6 +20,8 @@ interface Tip {
   createdById?: string;
   voteCount?: number;
   userVoted?: boolean;
+  openMonths?: number[];
+  seasonNote?: string;
 }
 
 const CATEGORIES = ["RESTAURANT", "EXCURSION", "MARKET", "EVENT", "OTHER"] as const;
@@ -35,7 +37,7 @@ const categoryEmoji: Record<string, string> = {
   OTHER: "📍",
 };
 
-const emptyForm = { category: "RESTAURANT" as TipCategory, title: "", description: "", address: "", website: "", imageUrl: "", mapUrl: "" };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
 
 function TipModal({
   tip,
@@ -54,6 +56,8 @@ function TipModal({
     website: tip?.website ?? "",
     imageUrl: tip?.imageUrl ?? "",
     mapUrl: tip?.mapUrl ?? "",
+    openMonths: tip?.openMonths ?? [] as number[],
+    seasonNote: tip?.seasonNote ?? "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -124,6 +128,37 @@ function TipModal({
           <Input id="mapUrl" label="Google Maps-länk" type="url" value={form.mapUrl}
             onChange={(e) => setForm((f) => ({ ...f, mapUrl: e.target.value }))} placeholder="https://maps.google.com/..." />
 
+          {/* Säsongsinfo */}
+          <div>
+            <label className="text-sm font-semibold text-stone-700 block mb-1.5">Öppet månader (valfritt)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {MONTHS.map((m, i) => {
+                const month = i + 1;
+                const selected = form.openMonths.includes(month);
+                return (
+                  <button
+                    key={month}
+                    type="button"
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        openMonths: selected
+                          ? f.openMonths.filter((x) => x !== month)
+                          : [...f.openMonths, month].sort((a, b) => a - b),
+                      }))
+                    }
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${selected ? "bg-forest-700 text-white" : "bg-stone-100 text-stone-500 hover:bg-forest-50"}`}
+                  >
+                    {m}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-stone-400 mt-1">Lämna tomt om platsen är öppen hela året.</p>
+          </div>
+          <Input id="seasonNote" label="Säsongsnotering" value={form.seasonNote}
+            onChange={(e) => setForm((f) => ({ ...f, seasonNote: e.target.value }))} placeholder="T.ex. Stängt november–mars" />
+
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
           <div className="flex gap-3 pt-1">
@@ -146,19 +181,30 @@ export default function AktiviteterPage() {
 
   const [tips, setTips] = useState<Tip[]>([]);
   const [filter, setFilter] = useState("ALL");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [seasonFilter, setSeasonFilter] = useState<"ALL" | "CURRENT">("ALL");
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editTip, setEditTip] = useState<Tip | undefined>();
 
+  async function fetchTips() {
+    const res = await fetch("/api/tips");
+    const data = await res.json();
+    return data as Tip[];
+  }
+
   function loadTips() {
     setLoading(true);
-    fetch("/api/tips")
-      .then((r) => r.json())
+    fetchTips()
       .then(setTips)
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadTips(); }, []);
+  useEffect(() => {
+    fetchTips()
+      .then(setTips)
+      .finally(() => setLoading(false));
+  }, []);
 
   async function handleDelete(tip: Tip) {
     if (!confirm(`Ta bort tipset "${tip.title}"?`)) return;
@@ -184,7 +230,17 @@ export default function AktiviteterPage() {
     return role === "ADMIN" || tip.createdById === userId;
   }
 
-  const filtered = filter === "ALL" ? tips : tips.filter((t) => t.category === filter);
+  const currentMonth = new Date().getMonth() + 1;
+  const filtered = tips.filter((t) => {
+    const categoryOk = filter === "ALL" || t.category === filter;
+    const favoriteOk = !favoritesOnly || Boolean(t.userVoted);
+    const seasonOk =
+      seasonFilter === "ALL" ||
+      !t.openMonths ||
+      t.openMonths.length === 0 ||
+      t.openMonths.includes(currentMonth);
+    return categoryOk && favoriteOk && seasonOk;
+  });
 
   const sampleTips: Tip[] = [
     { id: "s1", category: "RESTAURANT", title: "El Varadero – Torre de la Horadada", description: "Topprestaurang i den charmiga fiskehamnen Torre de la Horadada, 2 km norrut. Perfekt friterad fisk och arroz caldoso.", address: "Puerto de Torre de la Horadada", imageUrl: "/tips/restaurant.jpg" },
@@ -244,6 +300,25 @@ export default function AktiviteterPage() {
           ))}
         </div>
 
+        {tips.length > 0 && (
+          <div className="flex flex-wrap gap-2 justify-center mb-8">
+            {isLoggedIn && (
+              <button
+                onClick={() => setFavoritesOnly((v) => !v)}
+                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${favoritesOnly ? "bg-red-100 text-red-700 border border-red-200" : "bg-white text-stone-600 border border-stone-200 hover:bg-stone-50"}`}
+              >
+                {favoritesOnly ? "Visar: Mina favoriter" : "Mina favoriter"}
+              </button>
+            )}
+            <button
+              onClick={() => setSeasonFilter((v) => (v === "ALL" ? "CURRENT" : "ALL"))}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${seasonFilter === "CURRENT" ? "bg-sand-100 text-sand-800 border border-sand-200" : "bg-white text-stone-600 border border-stone-200 hover:bg-stone-50"}`}
+            >
+              {seasonFilter === "CURRENT" ? "Visar: Aktuellt nu" : "Aktuellt nu"}
+            </button>
+          </div>
+        )}
+
         {/* Tips grid */}
         {loading ? (
           <div className="flex justify-center py-20">
@@ -294,6 +369,18 @@ export default function AktiviteterPage() {
                   </div>
                   <p className="text-stone-500 text-sm leading-relaxed line-clamp-3 mb-3">{tip.description}</p>
                   <div className="flex flex-col gap-1.5">
+                    {tip.seasonNote && (
+                      <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1">
+                        <Calendar className="w-3.5 h-3.5 shrink-0" />
+                        {tip.seasonNote}
+                      </div>
+                    )}
+                    {tip.openMonths && tip.openMonths.length > 0 && tip.openMonths.length < 12 && (
+                      <div className="flex items-center gap-1.5 text-xs text-stone-400">
+                        <Calendar className="w-3.5 h-3.5 shrink-0" />
+                        Öppet: {tip.openMonths.map((m) => MONTHS[m - 1]).join(", ")}
+                      </div>
+                    )}
                     {tip.address && (
                       <div className="flex items-center gap-1.5 text-xs text-stone-400">
                         <MapPin className="w-3.5 h-3.5 text-sand-400 shrink-0" />

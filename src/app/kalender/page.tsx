@@ -1,5 +1,6 @@
 import { BookingCalendar } from "@/components/BookingCalendar";
 import { FlightInfo } from "@/components/FlightInfo";
+import { FlightWatchManager } from "@/components/FlightWatchManager";
 
 export const metadata = {
   title: "Kalender — Torbe",
@@ -17,6 +18,7 @@ export default function KalenderPage() {
             Klicka på ett inchecks- och utcheckningsdatum för att starta en bokningsförfrågan.
           </p>
           <FlightInfo />
+          <FlightWatchManager />
         </div>
 
         <BookingCalendar />

@@ -10,6 +10,7 @@ const arrivalSchema = z.object({
   parkingInfo: z.string().max(500).optional().default(""),
   houseRules: z.string().max(2000).optional().default(""),
   emergencyContact: z.string().max(200).optional().default(""),
+  departureChecklist: z.array(z.string().max(200)).optional().default([]),
 });
 
 // GET - authenticated users with approved booking may read

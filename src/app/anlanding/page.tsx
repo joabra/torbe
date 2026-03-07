@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Wifi, Car, Key, Phone, FileText, AlertCircle } from "lucide-react";
+import { Wifi, Car, Key, Phone, FileText, AlertCircle, CheckSquare, Square, ClipboardList } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 
 interface ArrivalInfo {
@@ -12,6 +12,7 @@ interface ArrivalInfo {
   parkingInfo?: string;
   houseRules?: string;
   emergencyContact?: string;
+  departureChecklist?: string[];
 }
 
 function InfoBlock({ icon, title, content }: { icon: React.ReactNode; title: string; content?: string }) {
@@ -37,6 +38,22 @@ export default function AnlandningPage() {
   const [info, setInfo] = useState<ArrivalInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
+  const [checkedItems, setCheckedItems] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("departureChecklist");
+      if (stored) setCheckedItems(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  function toggleItem(i: number) {
+    setCheckedItems((prev) => {
+      const next = { ...prev, [i]: !prev[i] };
+      try { localStorage.setItem("departureChecklist", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -126,6 +143,37 @@ export default function AnlandningPage() {
             <InfoBlock icon={<Car className="w-4 h-4 text-sand-500" />} title="Parkering" content={info?.parkingInfo} />
             <InfoBlock icon={<FileText className="w-4 h-4 text-sand-500" />} title="Husregler" content={info?.houseRules} />
             <InfoBlock icon={<Phone className="w-4 h-4 text-sand-500" />} title="Nödkontakt" content={info?.emergencyContact} />
+
+            {info?.departureChecklist && info.departureChecklist.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2 text-forest-800 font-semibold">
+                    <ClipboardList className="w-4 h-4 text-sand-500" />
+                    Avresechecklista
+                  </div>
+                </CardHeader>
+                <CardBody>
+                  <div className="flex flex-col divide-y divide-stone-100">
+                    {info.departureChecklist.map((item, i) => (
+                      <button
+                        key={i}
+                        onClick={() => toggleItem(i)}
+                        className="flex items-center gap-3 w-full text-left py-3 first:pt-0 last:pb-0"
+                      >
+                        {checkedItems[i]
+                          ? <CheckSquare className="w-5 h-5 text-emerald-500 shrink-0" />
+                          : <Square className="w-5 h-5 text-stone-300 shrink-0" />
+                        }
+                        <span className={checkedItems[i] ? "line-through text-stone-400" : "text-stone-700"}>{item}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {Object.values(checkedItems).filter(Boolean).length === info.departureChecklist.length && (
+                    <p className="mt-4 text-sm text-emerald-600 font-medium text-center">✅ Allt klarmarkerat — bra jobbat!</p>
+                  )}
+                </CardBody>
+              </Card>
+            )}
           </div>
         )}
       </div>

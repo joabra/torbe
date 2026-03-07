@@ -13,6 +13,15 @@ interface BookedPeriod {
   checkOut: string;
 }
 
+interface WaitlistEntry {
+  id: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  notified: boolean;
+  createdAt: string;
+}
+
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" });
 }
@@ -30,6 +39,10 @@ function BokaForm() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [bookedPeriods, setBookedPeriods] = useState<BookedPeriod[]>([]);
+  const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>([]);
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  const [waitlistMessage, setWaitlistMessage] = useState("");
+  const [showWaitlistCta, setShowWaitlistCta] = useState(false);
 
   useEffect(() => {
     fetch("/api/bookings")
@@ -37,6 +50,13 @@ function BokaForm() {
       .then((data: Array<BookedPeriod & { status: string }>) => {
         const approved = data.filter((b) => b.status === "APPROVED");
         setBookedPeriods(approved);
+      })
+      .catch(() => {});
+
+    fetch("/api/waitlist")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) setWaitlistEntries(data);
       })
       .catch(() => {});
   }, []);
@@ -71,9 +91,46 @@ function BokaForm() {
 
     if (res.ok) {
       setSuccess(true);
+      setShowWaitlistCta(false);
+      setWaitlistMessage("");
     } else {
       setError(data.error ?? "Något gick fel");
+      setShowWaitlistCta(res.status === 409);
     }
+  }
+
+  async function handleJoinWaitlist() {
+    if (!checkIn || !checkOut) {
+      setWaitlistMessage("Välj in- och utcheckningsdatum först.");
+      return;
+    }
+
+    setWaitlistSubmitting(true);
+    setWaitlistMessage("");
+
+    const res = await fetch("/api/waitlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ checkIn, checkOut, guests, message }),
+    });
+
+    const data = await res.json();
+    setWaitlistSubmitting(false);
+
+    if (res.ok) {
+      setWaitlistEntries((prev) => [data, ...prev]);
+      setShowWaitlistCta(false);
+      setWaitlistMessage("Du är nu uppsatt på väntelistan. Vi mejlar dig om datum blir lediga.");
+      return;
+    }
+
+    setWaitlistMessage(data.error ?? "Kunde inte lägga till väntelista");
+  }
+
+  async function handleDeleteWaitlist(id: string) {
+    const res = await fetch(`/api/waitlist/${id}`, { method: "DELETE" });
+    if (!res.ok) return;
+    setWaitlistEntries((prev) => prev.filter((entry) => entry.id !== id));
   }
 
   if (success) {
@@ -175,6 +232,27 @@ function BokaForm() {
                 </div>
               )}
 
+              {showWaitlistCta && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <p className="font-semibold">De här datumen är tyvärr redan bokade.</p>
+                  <p className="mt-1 text-amber-800">Vill du stå på väntelista och få e-post om det blir ledigt?</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" onClick={handleJoinWaitlist} disabled={waitlistSubmitting}>
+                      {waitlistSubmitting ? "Sparar..." : "Sätt mig på väntelista"}
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => setShowWaitlistCta(false)}>
+                      Inte nu
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {waitlistMessage && (
+                <div className="rounded-xl border border-forest-200 bg-forest-50 px-4 py-3 text-sm text-forest-800">
+                  {waitlistMessage}
+                </div>
+              )}
+
               <Button
                 type="submit"
                 variant="sand"
@@ -207,6 +285,33 @@ function BokaForm() {
                 >
                   <CalendarDays className="w-4 h-4 shrink-0 text-red-400" />
                   <span>{formatDate(b.checkIn)} – {formatDate(b.checkOut)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {waitlistEntries.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-sm font-semibold text-stone-500 uppercase tracking-widest mb-3">
+              Mina väntelistor
+            </h2>
+            <div className="space-y-2">
+              {waitlistEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5 text-sm text-amber-900"
+                >
+                  <span>
+                    {formatDate(entry.checkIn)} – {formatDate(entry.checkOut)} ({entry.guests} gäster)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteWaitlist(entry.id)}
+                    className="text-amber-700 hover:text-amber-900 font-semibold"
+                  >
+                    Ta bort
+                  </button>
                 </div>
               ))}
             </div>

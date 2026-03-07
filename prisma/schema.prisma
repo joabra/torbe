@@ -15,6 +15,7 @@ model User {
   approved         Boolean          @default(true)
   mfaSecret        String?
   mfaEnabled       Boolean          @default(false)
+  calendarToken    String?          @unique
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   bookings         Booking[]
@@ -23,16 +24,36 @@ model User {
   tipVotes         TipVote[]
   bookingMessages  BookingMessage[]
   visitPhotos      VisitPhoto[]
+  guestbookLikes   GuestbookLike[]
+  waitlistEntries  Waitlist[]
+  flightWatches    FlightWatch[]
+  supportMessages  SupportMessage[]
+  pollVotes        PollVote[]
+  createdPolls     Poll[]
+  notifications    Notification[]
+  instagramLinks   InstagramLink[]
 }
 
 model GuestbookEntry {
-  id        String   @id @default(cuid())
+  id        String          @id @default(cuid())
   authorId  String?
-  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  author    User?           @relation(fields: [authorId], references: [id], onDelete: SetNull)
   content   String
   imageUrl  String?
   visitYear Int?
-  createdAt DateTime @default(now())
+  createdAt DateTime        @default(now())
+  likes     GuestbookLike[]
+}
+
+model GuestbookLike {
+  id        String         @id @default(cuid())
+  entryId   String
+  entry     GuestbookEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@unique([entryId, userId])
 }
 
 enum Role {
@@ -41,20 +62,50 @@ enum Role {
 }
 
 model Booking {
-  id        String           @id @default(cuid())
-  userId    String?
-  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  guestName String?
-  checkIn   DateTime
-  checkOut  DateTime
-  guests    Int
-  message   String?
-  adminNote String?
-  status    BookingStatus    @default(PENDING)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  messages  BookingMessage[]
-  photos    VisitPhoto[]
+  id            String           @id @default(cuid())
+  userId        String?
+  user          User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestName     String?
+  checkIn       DateTime
+  checkOut      DateTime
+  guests        Int
+  message       String?
+  adminNote     String?
+  status        BookingStatus    @default(PENDING)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  messages      BookingMessage[]
+  photos        VisitPhoto[]
+  dateProposals DateProposal[]
+  checklistItems BookingChecklistItem[]
+  reminderLogs   ReminderLog[]
+}
+
+model BookingChecklistItem {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  content   String
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ReminderLog {
+  id        String       @id @default(cuid())
+  bookingId String
+  booking   Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  type      ReminderType
+  sentAt    DateTime     @default(now())
+
+  @@unique([bookingId, type])
+}
+
+enum ReminderType {
+  DAYS_30
+  DAYS_14
+  DAYS_7
+  DAYS_1
 }
 
 enum BookingStatus {
@@ -72,6 +123,8 @@ model Tip {
   website     String?
   imageUrl    String?
   mapUrl      String?
+  openMonths  Int[]
+  seasonNote  String?
   createdById String?
   createdBy   User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime    @default(now())
@@ -129,4 +182,172 @@ model VisitPhoto {
   url       String
   caption   String?
   createdAt DateTime @default(now())
+}
+
+model Waitlist {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkIn   DateTime
+  checkOut  DateTime
+  guests    Int      @default(1)
+  message   String?
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model DateProposal {
+  id               String         @id @default(cuid())
+  bookingId        String
+  booking          Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  proposedCheckIn  DateTime
+  proposedCheckOut DateTime
+  status           ProposalStatus @default(PENDING)
+  createdAt        DateTime       @default(now())
+}
+
+model FlightWatch {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  origin         String
+  destination    String
+  direction      FlightDirection
+  maxPrice       Int
+  active         Boolean         @default(true)
+  lastNotifiedAt DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model CronJobRun {
+  id         String           @id @default(cuid())
+  job        CronJobType
+  source     CronJobSource
+  status     CronJobStatus
+  startedAt  DateTime         @default(now())
+  finishedAt DateTime?
+  durationMs Int?
+  result     Json?
+  error      String?
+  createdAt  DateTime         @default(now())
+
+  @@index([job, createdAt])
+  @@index([createdAt])
+}
+
+enum CronJobType {
+  REMINDERS
+  FLIGHT_WATCH
+}
+
+enum CronJobSource {
+  SCHEDULED
+  MANUAL
+}
+
+enum CronJobStatus {
+  SUCCESS
+  ERROR
+}
+
+enum FlightDirection {
+  OUTBOUND
+  RETURN
+}
+
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Poll {
+  id          String      @id @default(cuid())
+  question    String
+  description String?
+  status      PollStatus  @default(ACTIVE)
+  createdById String?
+  createdBy   User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  closesAt    DateTime?
+  options     PollOption[]
+  votes       PollVote[]
+
+  @@index([status, createdAt])
+}
+
+model PollOption {
+  id        String   @id @default(cuid())
+  pollId    String
+  poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  text      String
+  createdAt DateTime @default(now())
+  votes     PollVote[]
+
+  @@index([pollId])
+}
+
+model PollVote {
+  id        String     @id @default(cuid())
+  pollId    String
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  optionId  String
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@unique([pollId, userId])
+  @@index([optionId])
+}
+
+enum PollStatus {
+  ACTIVE
+  CLOSED
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  linkUrl   String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+
+  @@index([userId, isRead, createdAt])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  SUPPORT_MESSAGE
+  POLL_CREATED
+}
+
+model InstagramLink {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permalink String
+  imageUrl  String?
+  caption   String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }

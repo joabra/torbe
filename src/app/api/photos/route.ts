@@ -13,7 +13,10 @@ const photoSchema = z.object({
 export async function GET() {
   const photos = await prisma.visitPhoto.findMany({
     orderBy: { createdAt: "desc" },
-    include: { user: { select: { name: true } } },
+    include: {
+      user: { select: { name: true } },
+      booking: { select: { checkIn: true, checkOut: true } },
+    },
   });
   return NextResponse.json(photos);
 }

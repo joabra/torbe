@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { BookOpen, Trash2, Send } from "lucide-react";
+import { BookOpen, Trash2, Send, Heart } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
@@ -11,6 +11,8 @@ interface GuestbookEntry {
   visitYear: number | null;
   createdAt: string;
   author: { id: string; name: string } | null;
+  likeCount: number;
+  userLiked: boolean;
 }
 
 export default function GastbokPage() {
@@ -22,6 +24,7 @@ export default function GastbokPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [likingId, setLikingId] = useState<string | null>(null);
 
   async function loadEntries() {
     const res = await fetch("/api/gastbok");
@@ -60,6 +63,21 @@ export default function GastbokPage() {
     await fetch(`/api/gastbok/${id}`, { method: "DELETE" });
     setEntries((prev) => prev.filter((e) => e.id !== id));
     setDeletingId(null);
+  }
+
+  async function handleLike(entry: GuestbookEntry) {
+    if (!session) return;
+    setLikingId(entry.id);
+    // Optimistic update
+    setEntries((prev) =>
+      prev.map((e) =>
+        e.id === entry.id
+          ? { ...e, userLiked: !e.userLiked, likeCount: e.likeCount + (e.userLiked ? -1 : 1) }
+          : e
+      )
+    );
+    await fetch(`/api/gastbok/${entry.id}/like`, { method: "POST" });
+    setLikingId(null);
   }
 
   const currentYear = new Date().getFullYear();
@@ -177,6 +195,24 @@ export default function GastbokPage() {
                         <p className="text-stone-700 text-sm whitespace-pre-wrap break-words">
                           {entry.content}
                         </p>
+                        {/* Like button */}
+                        <div className="mt-3 flex items-center gap-2">
+                          <button
+                            onClick={() => handleLike(entry)}
+                            disabled={!session || likingId === entry.id}
+                            title={session ? (entry.userLiked ? "Ta bort gillning" : "Gilla") : "Logga in för att gilla"}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                              entry.userLiked
+                                ? "bg-red-50 text-red-500 border border-red-200"
+                                : session
+                                ? "bg-stone-50 text-stone-400 border border-stone-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
+                                : "bg-stone-50 text-stone-300 border border-stone-200 cursor-default"
+                            }`}
+                          >
+                            <Heart className={`h-3 h-3 ${entry.userLiked ? "fill-current" : ""}`} />
+                            {entry.likeCount > 0 ? entry.likeCount : ""}
+                          </button>
+                        </div>
                       </div>
                       {canDelete && (
                         <button

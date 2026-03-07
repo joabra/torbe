@@ -165,3 +165,174 @@ export async function emailUserBookingStatus(
     )
   );
 }
+
+/** Användare: påminnelse inför incheckning */
+export async function emailUserBookingReminder(
+  booking: { checkIn: Date; checkOut: Date; guests: number },
+  user: { name: string; email: string },
+  daysLeft: 30 | 14 | 7 | 1,
+  context?: {
+    checklistCompleted?: number;
+    checklistTotal?: number;
+    arrival?: {
+      wifiName?: string;
+      checkInInstructions?: string;
+      houseRules?: string;
+    };
+  }
+) {
+  const fmt = (d: Date) => d.toLocaleDateString("sv-SE");
+  const name = escapeHtml(user.name);
+  const preheader =
+    daysLeft === 30
+      ? "Nu är det en månad kvar till resan"
+      : daysLeft === 14
+      ? "Nu är det två veckor kvar"
+      : daysLeft === 7
+      ? "Nu är det en vecka kvar"
+      : "Nu är det dags i morgon";
+
+  const weatherUrl = `https://www.yr.no/en/forecast/daily-table/2-2513227/Spain/Valencia/Pilar%20de%20la%20Horadada/Mil%20Palmeras?i=0`;
+  const flightUrl = `${BASE_URL}/kalender`;
+  const checklistUrl = `${BASE_URL}/mina-bokningar`;
+  const arrivalUrl = `${BASE_URL}/anlanding`;
+
+  const checklistCompleted = context?.checklistCompleted ?? 0;
+  const checklistTotal = context?.checklistTotal ?? 0;
+  const checklistText = checklistTotal > 0
+    ? `${checklistCompleted}/${checklistTotal} punkter avklarade`
+    : "Ingen checklista skapad ännu";
+
+  const arrivalBits = context?.arrival;
+  const arrivalSummary = [
+    arrivalBits?.wifiName ? `<li><strong>WiFi:</strong> ${escapeHtml(arrivalBits.wifiName)}</li>` : "",
+    arrivalBits?.checkInInstructions ? `<li><strong>Incheckning:</strong> ${escapeHtml(arrivalBits.checkInInstructions).slice(0, 140)}${arrivalBits.checkInInstructions.length > 140 ? "..." : ""}</li>` : "",
+    arrivalBits?.houseRules ? `<li><strong>Husregler:</strong> ${escapeHtml(arrivalBits.houseRules).slice(0, 140)}${arrivalBits.houseRules.length > 140 ? "..." : ""}</li>` : "",
+  ].filter(Boolean).join("");
+
+  await send(
+    user.email,
+    `Påminnelse: Din vistelse börjar om ${daysLeft} ${daysLeft === 1 ? "dag" : "dagar"} – Torbe`,
+    wrap(
+      `Din vistelse närmar sig, ${name}! 🌴`,
+      `<p>${preheader}. Det är <strong>${daysLeft} ${daysLeft === 1 ? "dag" : "dagar"} kvar</strong> till din vistelse i Mil Palmeras.</p>
+       <p><strong>Incheckning:</strong> ${fmt(booking.checkIn)}<br>
+       <strong>Utcheckning:</strong> ${fmt(booking.checkOut)}<br>
+       <strong>Antal gäster:</strong> ${booking.guests}</p>
+       <p><strong>Checklista-status:</strong> ${checklistText}</p>
+       ${arrivalSummary ? `<p><strong>Snabbt om ankomst:</strong></p><ul>${arrivalSummary}</ul>` : ""}
+       <p>Planeringstips inför resan:</p>
+       <ul>
+         <li><a href="${weatherUrl}">Kolla väderprognos för Mil Palmeras</a></li>
+         <li><a href="${flightUrl}">Se flygtips / prisvakter</a></li>
+         <li><a href="${arrivalUrl}">Läs ankomstinfo</a></li>
+         <li><a href="${checklistUrl}">Bocka av checklistan</a></li>
+       </ul>
+       <a class="btn" href="${checklistUrl}">Öppna mina bokningar</a>`
+    )
+  );
+}
+
+/** Användare: prisvakt träff */
+export async function emailUserFlightWatchMatch(
+  watch: {
+    origin: string;
+    destination: string;
+    maxPrice: number;
+    foundPrice: number;
+    date: string;
+    direction: "OUTBOUND" | "RETURN";
+  },
+  user: { name: string; email: string }
+) {
+  const name = escapeHtml(user.name);
+  const dir = watch.direction === "OUTBOUND" ? "Utresa" : "Hemresa";
+  await send(
+    user.email,
+    `Prisvakt: flyg för ${watch.foundPrice} kr (${watch.origin}→${watch.destination})`,
+    wrap(
+      `Prisvakt-träff, ${name}! ✈️`,
+      `<p>Vi hittade ett pris som matchar din bevakning.</p>
+       <p><strong>${dir}:</strong> ${watch.origin} → ${watch.destination}<br>
+       <strong>Datum:</strong> ${watch.date}<br>
+       <strong>Hittat pris:</strong> ${watch.foundPrice} kr<br>
+       <strong>Din gräns:</strong> ${watch.maxPrice} kr</p>
+       <a class="btn" href="${BASE_URL}/kalender">Se flyg i kalendern</a>`
+    )
+  );
+}
+
+/** Användare: väntelista matchar lediga datum */
+export async function emailUserWaitlistMatch(
+  waitlist: {
+    checkIn: Date;
+    checkOut: Date;
+    guests: number;
+    message?: string | null;
+  },
+  user: { name: string; email: string }
+) {
+  const fmt = (d: Date) => d.toLocaleDateString("sv-SE");
+  const name = escapeHtml(user.name);
+  const message = waitlist.message ? escapeHtml(waitlist.message) : null;
+
+  await send(
+    user.email,
+    "Lediga datum kan passa din väntelista – Torbe",
+    wrap(
+      `Hej ${name}, vi har goda nyheter!`,
+      `<p>Det har blivit ledigt för datum som matchar din väntelista.</p>
+       <p><strong>Önskade datum:</strong> ${fmt(waitlist.checkIn)} – ${fmt(waitlist.checkOut)}<br>
+       <strong>Antal gäster:</strong> ${waitlist.guests}</p>
+       ${message ? `<p><strong>Ditt meddelande:</strong><br>${message}</p>` : ""}
+       <p>Tips: skicka en bokningsförfrågan så snart som möjligt.</p>
+       <a class="btn" href="${BASE_URL}/boka?checkIn=${waitlist.checkIn.toISOString().split("T")[0]}&checkOut=${waitlist.checkOut.toISOString().split("T")[0]}&guests=${waitlist.guests}">Boka nu</a>`
+    )
+  );
+}
+
+/** Admins: ny post i global supporttråd */
+export async function emailAdminsSupportThreadMessage(payload: {
+  authorName: string;
+  content: string;
+}) {
+  const authorName = escapeHtml(payload.authorName);
+  const preview = escapeHtml(payload.content).slice(0, 240);
+
+  await sendToAdmins(
+    `Ny fråga i supporttråden från ${payload.authorName}`,
+    wrap(
+      "Ny fråga i Fråga admin",
+      `<p><strong>Från:</strong> ${authorName}</p>
+       <p><strong>Meddelande:</strong><br>${preview}${payload.content.length > 240 ? "..." : ""}</p>
+       <a class="btn" href="${BASE_URL}/community">Öppna tråden</a>`
+    )
+  );
+}
+
+/** Användare: ny omröstning skapad */
+export async function emailUsersNewPoll(
+  poll: { question: string; options: string[] },
+  recipients: Array<{ name: string; email: string }>
+) {
+  if (recipients.length === 0) return;
+
+  const question = escapeHtml(poll.question);
+  const optionsHtml = poll.options.map((option) => `<li>${escapeHtml(option)}</li>`).join("");
+
+  await Promise.all(
+    recipients.map((recipient) =>
+      send(
+        recipient.email,
+        "Ny omröstning i Torbe",
+        wrap(
+          `Hej ${escapeHtml(recipient.name)}!`,
+          `<p>En ny omröstning har publicerats:</p>
+           <p><strong>${question}</strong></p>
+           <ul>${optionsHtml}</ul>
+           <a class="btn" href="${BASE_URL}/community">Rösta i Gemenskap</a>`
+        )
+      )
+    )
+  );
+}

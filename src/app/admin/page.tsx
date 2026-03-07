@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Check, X, Trash2, Users, CalendarDays, MessageSquare, Plus, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal, UserCheck, KeyRound, Shield, Home, BarChart2, Download, Send, ChevronDown, Wifi, Key, Car, Phone, ClipboardList } from "lucide-react";
+import { Check, X, Trash2, Users, CalendarDays, MessageSquare, Plus, UtensilsCrossed, Map, ShoppingBag, PartyPopper, MoreHorizontal, UserCheck, KeyRound, Shield, Home, BarChart2, Download, Send, ChevronDown, Key, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -58,6 +58,7 @@ interface ArrivalInfo {
   parkingInfo: string;
   houseRules: string;
   emergencyContact: string;
+  departureChecklist: string[];
 }
 
 interface BookingMessage {
@@ -66,6 +67,65 @@ interface BookingMessage {
   isAdmin: boolean;
   createdAt: string;
   author?: { name: string } | null;
+}
+
+interface WaitlistEntry {
+  id: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  message?: string | null;
+  notified: boolean;
+  createdAt: string;
+  user: { id: string; name: string; email: string };
+}
+
+interface AdminStats {
+  summary: {
+    totalBookings: number;
+    approvedBookings: number;
+    pendingBookings: number;
+    rejectedBookings: number;
+    totalUsers: number;
+    pendingUsers: number;
+    activeWaitlist: number;
+    activeFlightWatches: number;
+  };
+  notifications: {
+    remindersSent24h: number;
+    flightWatchNotifications24h: number;
+  };
+  recentReminderEvents: Array<{
+    id: string;
+    type: "DAYS_30" | "DAYS_14" | "DAYS_7" | "DAYS_1";
+    sentAt: string;
+    checkIn: string;
+    checkOut: string;
+    userName: string | null;
+    userEmail: string | null;
+  }>;
+  recentFlightWatchHits: Array<{
+    id: string;
+    origin: string;
+    destination: string;
+    direction: "OUTBOUND" | "RETURN";
+    maxPrice: number;
+    lastNotifiedAt: string | null;
+    userName: string;
+    userEmail: string;
+  }>;
+  recentCronRuns: Array<{
+    id: string;
+    job: "REMINDERS" | "FLIGHT_WATCH";
+    source: "SCHEDULED" | "MANUAL";
+    status: "SUCCESS" | "ERROR";
+    startedAt: string;
+    finishedAt: string | null;
+    durationMs: number | null;
+    result: unknown;
+    error: string | null;
+    createdAt: string;
+  }>;
 }
 
 const statusVariant = { PENDING: "pending" as const, APPROVED: "approved" as const, REJECTED: "rejected" as const };
@@ -83,10 +143,14 @@ export default function AdminPage() {
   const router = useRouter();
   const role = (session?.user as { role?: string })?.role;
 
-  const [tab, setTab] = useState<"bookings" | "tips" | "users" | "apartment" | "stats">("bookings");
+  const [tab, setTab] = useState<"bookings" | "tips" | "users" | "waitlist" | "apartment" | "stats">("bookings");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [tips, setTips] = useState<Tip[]>([]);
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
+  const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
+  const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>([]);
+  const [waitlistSort, setWaitlistSort] = useState<"newest" | "oldest" | "checkInAsc">("newest");
+  const [notifyingWaitlistId, setNotifyingWaitlistId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [bookingStatusFilter, setBookingStatusFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL");
@@ -105,8 +169,9 @@ export default function AdminPage() {
 
   // Arrival info
   const [arrivalForm, setArrivalForm] = useState<ArrivalInfo>({
-    wifiName: "", wifiPassword: "", checkInInstructions: "", parkingInfo: "", houseRules: "", emergencyContact: "",
+    wifiName: "", wifiPassword: "", checkInInstructions: "", parkingInfo: "", houseRules: "", emergencyContact: "", departureChecklist: [],
   });
+  const [newChecklistItem, setNewChecklistItem] = useState("");
   const [arrivalLoading, setArrivalLoading] = useState(false);
   const [arrivalSuccess, setArrivalSuccess] = useState(false);
 
@@ -115,11 +180,24 @@ export default function AdminPage() {
   const [messages, setMessages] = useState<Record<string, BookingMessage[]>>({});
   const [newMessage, setNewMessage] = useState<Record<string, string>>({});
   const [sendingMessage, setSendingMessage] = useState<Record<string, boolean>>({});
+  const [runningCronJob, setRunningCronJob] = useState<"reminders" | "flight-watch" | null>(null);
+  const [cronResult, setCronResult] = useState<string>("");
+  const [cronJobFilter, setCronJobFilter] = useState<"ALL" | "REMINDERS" | "FLIGHT_WATCH">("ALL");
+  const [cronSourceFilter, setCronSourceFilter] = useState<"ALL" | "SCHEDULED" | "MANUAL">("ALL");
+  const [cronStatusFilter, setCronStatusFilter] = useState<"ALL" | "SUCCESS" | "ERROR">("ALL");
+  const [cronSearch, setCronSearch] = useState("");
+  const [selectedCronRunId, setSelectedCronRunId] = useState<string | null>(null);
+  const [cronPage, setCronPage] = useState(1);
+
+  // Date proposals (admin)
+  const [showProposalForm, setShowProposalForm] = useState<Record<string, boolean>>({});
+  const [proposalForm, setProposalForm] = useState<Record<string, { checkIn: string; checkOut: string }>>({});
+  const [sendingProposal, setSendingProposal] = useState<Record<string, boolean>>({});
 
   // New tip form
   const [showTipForm, setShowTipForm] = useState(false);
   const [tipForm, setTipForm] = useState({
-    category: "RESTAURANT", title: "", description: "", address: "", website: "", imageUrl: "", mapUrl: "",
+    category: "RESTAURANT", title: "", description: "", address: "", website: "", imageUrl: "", mapUrl: "", openMonths: [] as number[], seasonNote: "",
   });
   const [tipLoading, setTipLoading] = useState(false);
   const [tipImageLoading, setTipImageLoading] = useState(false);
@@ -149,12 +227,16 @@ export default function AdminPage() {
         fetch("/api/admin/bookings").then((r) => r.ok ? r.json() : []),
         fetch("/api/tips").then((r) => r.ok ? r.json() : []),
         fetch("/api/admin/users").then((r) => r.ok ? r.json() : []),
+        fetch("/api/admin/stats").then((r) => r.ok ? r.json() : null),
+        fetch("/api/admin/waitlist").then((r) => r.ok ? r.json() : []),
         fetch("/api/admin/apartment").then((r) => r.ok ? r.json() : null),
         fetch("/api/admin/arrival-info").then((r) => r.ok ? r.json() : null),
-      ]).then(([b, t, u, apt, arr]) => {
+      ]).then(([b, t, u, s, w, apt, arr]) => {
         setBookings(b);
         setTips(t);
         setAppUsers(u);
+        setAdminStats(s);
+        setWaitlistEntries(w);
         if (apt) setApartmentForm(apt);
         if (arr) setArrivalForm((prev) => ({ ...prev, ...arr }));
       }).finally(() => setLoading(false));
@@ -213,7 +295,7 @@ export default function AdminPage() {
     if (res.ok) {
       const newTip = await res.json();
       setTips((prev) => [newTip, ...prev]);
-      setTipForm({ category: "RESTAURANT", title: "", description: "", address: "", website: "", imageUrl: "", mapUrl: "" });
+      setTipForm({ category: "RESTAURANT", title: "", description: "", address: "", website: "", imageUrl: "", mapUrl: "", openMonths: [], seasonNote: "" });
       setShowTipForm(false);
     }
     setTipLoading(false);
@@ -343,6 +425,23 @@ export default function AdminPage() {
     setArrivalLoading(false);
   }
 
+  async function handleProposeDate(bookingId: string) {
+    const form = proposalForm[bookingId];
+    if (!form?.checkIn || !form?.checkOut) return;
+    setSendingProposal((p) => ({ ...p, [bookingId]: true }));
+    const res = await fetch(`/api/bookings/${bookingId}/date-proposals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proposedCheckIn: form.checkIn, proposedCheckOut: form.checkOut }),
+    });
+    if (res.ok) {
+      setShowProposalForm((p) => ({ ...p, [bookingId]: false }));
+      setProposalForm((p) => ({ ...p, [bookingId]: { checkIn: "", checkOut: "" } }));
+      alert("Alternativa datum skickade till gästen!");
+    }
+    setSendingProposal((p) => ({ ...p, [bookingId]: false }));
+  }
+
   async function handleToggleMessages(bookingId: string) {
     const next = !expandedMessages[bookingId];
     setExpandedMessages((p) => ({ ...p, [bookingId]: next }));
@@ -372,6 +471,58 @@ export default function AdminPage() {
     setSendingMessage((p) => ({ ...p, [bookingId]: false }));
   }
 
+  async function handleManualWaitlistNotify(id: string) {
+    setNotifyingWaitlistId(id);
+    const res = await fetch(`/api/admin/waitlist/${id}/notify`, { method: "POST" });
+    if (res.ok) {
+      const updated = await res.json();
+      setWaitlistEntries((prev) => prev.map((entry) => (entry.id === id ? updated : entry)));
+    } else {
+      const data = await res.json();
+      alert(data.error ?? "Kunde inte skicka notis");
+    }
+    setNotifyingWaitlistId(null);
+  }
+
+  async function handleDeleteWaitlistEntry(id: string) {
+    if (!confirm("Ta bort denna väntelistepost?")) return;
+    const res = await fetch(`/api/waitlist/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setWaitlistEntries((prev) => prev.filter((entry) => entry.id !== id));
+    }
+  }
+
+  async function handleRunCron(job: "reminders" | "flight-watch") {
+    setRunningCronJob(job);
+    setCronResult("");
+
+    const res = await fetch(`/api/admin/cron/${job}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setCronResult(data.error ?? `Körning misslyckades (${job})`);
+      setRunningCronJob(null);
+      return;
+    }
+
+    if (job === "flight-watch") {
+      setCronResult(`Prisvakt körd: ${data.notificationsSent ?? 0} notifieringar av ${data.watchesChecked ?? 0} bevakningar.`);
+    } else {
+      setCronResult(`Påminnelser körda: ${data.remindersSent ?? 0} mejl skickade.`);
+    }
+
+    const statsRes = await fetch("/api/admin/stats");
+    if (statsRes.ok) {
+      const stats = await statsRes.json();
+      setAdminStats(stats);
+    }
+
+    setRunningCronJob(null);
+  }
+
   if (status === "loading" || loading) {
     return (
       <div className="pt-28 min-h-screen flex items-center justify-center">
@@ -382,7 +533,17 @@ export default function AdminPage() {
 
   const pending = bookings.filter((b) => b.status === "PENDING");
   const pendingUsers = appUsers.filter((u) => !u.approved);
+  const activeWaitlist = waitlistEntries.filter((w) => !w.notified).length;
   const filteredBookings = bookingStatusFilter === "ALL" ? bookings : bookings.filter((b) => b.status === bookingStatusFilter);
+  const sortedWaitlist = [...waitlistEntries].sort((a, b) => {
+    if (waitlistSort === "oldest") {
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    }
+    if (waitlistSort === "checkInAsc") {
+      return new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime();
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
 
   return (
     <div className="pt-28 pb-20 min-h-screen bg-stone-50 px-6">
@@ -408,13 +569,13 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex flex-wrap gap-2 mb-6">
-          {(["bookings", "tips", "users", "apartment", "stats"] as const).map((t) => (
+          {(["bookings", "tips", "users", "waitlist", "apartment", "stats"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${tab === t ? "bg-forest-800 text-white" : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200"}`}
             >
-              {t === "bookings" ? `Bokningar (${pending.length} önskningar)` : t === "tips" ? "Tips & aktiviteter" : t === "users" ? `Användare${pendingUsers.length > 0 ? ` (⚠️ ${pendingUsers.length})` : ""}` : t === "apartment" ? "Lägenheten" : "Statistik"}
+              {t === "bookings" ? `Bokningar (${pending.length} önskningar)` : t === "tips" ? "Tips & aktiviteter" : t === "users" ? `Användare${pendingUsers.length > 0 ? ` (⚠️ ${pendingUsers.length})` : ""}` : t === "waitlist" ? `Väntelista (${activeWaitlist} aktiva)` : t === "apartment" ? "Lägenheten" : "Statistik"}
             </button>
           ))}
         </div>
@@ -540,6 +701,50 @@ export default function AdminPage() {
                           Avslå
                         </Button>
                       </div>
+
+                      {/* Date proposal */}
+                      <div className="border-t border-stone-100 pt-3">
+                        <button
+                          onClick={() => setShowProposalForm((p) => ({ ...p, [booking.id]: !p[booking.id] }))}
+                          className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-forest-700 transition-colors"
+                        >
+                          <CalendarDays className="w-3.5 h-3.5" />
+                          Föreslå alternativa datum
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showProposalForm[booking.id] ? "rotate-180" : ""}`} />
+                        </button>
+                        {showProposalForm[booking.id] && (
+                          <div className="mt-3 flex flex-col gap-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-xs text-stone-500 block mb-1">Föreslagen incheckning</label>
+                                <input
+                                  type="date"
+                                  value={proposalForm[booking.id]?.checkIn ?? ""}
+                                  onChange={(e) => setProposalForm((p) => ({ ...p, [booking.id]: { ...p[booking.id], checkIn: e.target.value } }))}
+                                  className="w-full text-sm rounded-xl border border-stone-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sand-400"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-stone-500 block mb-1">Föreslagen utcheckning</label>
+                                <input
+                                  type="date"
+                                  value={proposalForm[booking.id]?.checkOut ?? ""}
+                                  onChange={(e) => setProposalForm((p) => ({ ...p, [booking.id]: { ...p[booking.id], checkOut: e.target.value } }))}
+                                  className="w-full text-sm rounded-xl border border-stone-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sand-400"
+                                />
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="sand"
+                              disabled={sendingProposal[booking.id] || !proposalForm[booking.id]?.checkIn || !proposalForm[booking.id]?.checkOut}
+                              onClick={() => handleProposeDate(booking.id)}
+                            >
+                              {sendingProposal[booking.id] ? "Skickar..." : "Skicka förslag till gäst"}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -638,6 +843,31 @@ export default function AdminPage() {
                     <Input label="Adress" value={tipForm.address} onChange={(e) => setTipForm((p) => ({ ...p, address: e.target.value }))} />
                     <Input label="Webbplats (URL)" type="url" value={tipForm.website} onChange={(e) => setTipForm((p) => ({ ...p, website: e.target.value }))} />
                     <Input label="Karta (Google Maps URL)" type="url" value={tipForm.mapUrl} onChange={(e) => setTipForm((p) => ({ ...p, mapUrl: e.target.value }))} placeholder="https://maps.google.com/..." />
+                    <div>
+                      <label className="text-sm font-medium text-forest-800 block mb-1">Öppet månader</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"].map((m, i) => {
+                          const month = i + 1;
+                          const selected = tipForm.openMonths.includes(month);
+                          return (
+                            <button
+                              key={month}
+                              type="button"
+                              onClick={() =>
+                                setTipForm((p) => ({
+                                  ...p,
+                                  openMonths: selected ? p.openMonths.filter((x) => x !== month) : [...p.openMonths, month].sort((a, b) => a - b),
+                                }))
+                              }
+                              className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${selected ? "bg-forest-700 text-white" : "bg-stone-100 text-stone-500 hover:bg-forest-50"}`}
+                            >
+                              {m}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <Input label="Säsongsnotering" value={tipForm.seasonNote} onChange={(e) => setTipForm((p) => ({ ...p, seasonNote: e.target.value }))} placeholder="T.ex. bäst under vår och höst" />
 
                     {/* Bilduppladdning */}
                     <div>
@@ -831,6 +1061,84 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* Waitlist tab */}
+        {tab === "waitlist" && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="text-lg font-semibold text-forest-900 flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-sand-500" />
+                Väntelista
+              </h2>
+              <div>
+                <select
+                  value={waitlistSort}
+                  onChange={(e) => setWaitlistSort(e.target.value as "newest" | "oldest" | "checkInAsc")}
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-sand-400"
+                >
+                  <option value="newest">Senast skapad först</option>
+                  <option value="oldest">Äldst först</option>
+                  <option value="checkInAsc">Tidigaste incheckning först</option>
+                </select>
+              </div>
+            </div>
+
+            {sortedWaitlist.length === 0 && (
+              <Card>
+                <CardBody className="text-center py-12 text-stone-400">Inga väntelisteposter ännu</CardBody>
+              </Card>
+            )}
+
+            {sortedWaitlist.map((entry) => (
+              <Card key={entry.id}>
+                <CardHeader className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 font-semibold text-forest-800">
+                      <CalendarDays className="w-4 h-4 text-sand-500" />
+                      {formatDateShort(entry.checkIn)} → {formatDateShort(entry.checkOut)}
+                    </div>
+                    <div className="text-sm text-stone-500 mt-1">
+                      <span className="font-medium text-stone-700">{entry.user.name}</span>
+                      <span className="mx-2">•</span>
+                      <span>{entry.user.email}</span>
+                      <span className="mx-2">•</span>
+                      <span>{entry.guests} gäster</span>
+                    </div>
+                    <p className="text-xs text-stone-400 mt-1">Skapad {new Date(entry.createdAt).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}</p>
+                  </div>
+                  <Badge variant={entry.notified ? "approved" : "pending"}>{entry.notified ? "Notifierad" : "Aktiv"}</Badge>
+                </CardHeader>
+                <CardBody>
+                  {entry.message && (
+                    <div className="bg-stone-50 rounded-xl p-3 text-sm text-stone-600 mb-4">
+                      <span className="font-medium text-stone-700">Meddelande: </span>
+                      {entry.message}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={notifyingWaitlistId === entry.id}
+                      onClick={() => handleManualWaitlistNotify(entry.id)}
+                    >
+                      {notifyingWaitlistId === entry.id ? "Skickar..." : "Skicka manuell notis"}
+                    </Button>
+
+                    <button
+                      onClick={() => handleDeleteWaitlistEntry(entry.id)}
+                      className="text-stone-300 hover:text-red-500 transition-colors p-1"
+                      title="Ta bort väntelistepost"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </CardBody>
+              </Card>
+            ))}
+          </div>
+        )}
+
         {/* Apartment tab */}
         {tab === "apartment" && (
           <div className="flex flex-col gap-6">
@@ -952,6 +1260,62 @@ export default function AdminPage() {
                   value={arrivalForm.emergencyContact}
                   onChange={(e) => setArrivalForm((p) => ({ ...p, emergencyContact: e.target.value }))}
                 />
+                {/* Departure checklist */}
+                <div>
+                  <label className="text-sm font-medium text-forest-800 block mb-2">Avresechecklista</label>
+                  <div className="flex flex-col gap-2 mb-3">
+                    {arrivalForm.departureChecklist.map((item, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-stone-50 rounded-xl px-4 py-2.5">
+                        <span className="flex-1 text-sm text-stone-700">{item}</span>
+                        <button
+                          type="button"
+                          onClick={() => setArrivalForm((p) => ({ ...p, departureChecklist: p.departureChecklist.filter((_, j) => j !== i) }))}
+                          className="text-stone-300 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {arrivalForm.departureChecklist.length === 0 && (
+                      <p className="text-xs text-stone-400 italic">Inga punkter ännu</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ny checklistepunkt..."
+                      value={newChecklistItem}
+                      onChange={(e) => setNewChecklistItem(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const trimmed = newChecklistItem.trim();
+                          if (trimmed) {
+                            setArrivalForm((p) => ({ ...p, departureChecklist: [...p.departureChecklist, trimmed] }));
+                            setNewChecklistItem("");
+                          }
+                        }
+                      }}
+                      className="flex-1 text-sm rounded-xl border border-stone-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sand-400"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const trimmed = newChecklistItem.trim();
+                        if (trimmed) {
+                          setArrivalForm((p) => ({ ...p, departureChecklist: [...p.departureChecklist, trimmed] }));
+                          setNewChecklistItem("");
+                        }
+                      }}
+                    >
+                      <Plus className="w-4 h-4" />
+                      Lägg till
+                    </Button>
+                  </div>
+                </div>
+
                 {arrivalSuccess && (
                   <div className="bg-emerald-50 text-emerald-700 rounded-xl px-4 py-3 text-sm">
                     Anländningsinformation uppdaterad!
@@ -994,6 +1358,27 @@ export default function AdminPage() {
 
           // Unique bookers
           const uniqueUsers = new Set(approved.map((b) => b.user?.id).filter(Boolean)).size;
+          const cronRuns = adminStats?.recentCronRuns ?? [];
+          const CRON_PAGE_SIZE = 8;
+          const filteredCronRuns = cronRuns.filter((run) => {
+            const byJob = cronJobFilter === "ALL" || run.job === cronJobFilter;
+            const bySource = cronSourceFilter === "ALL" || run.source === cronSourceFilter;
+            const byStatus = cronStatusFilter === "ALL" || run.status === cronStatusFilter;
+            const query = cronSearch.trim().toLowerCase();
+            const haystack = `${run.job} ${run.source} ${run.status} ${run.error ?? ""}`.toLowerCase();
+            const bySearch = !query || haystack.includes(query);
+            return byJob && bySource && byStatus && bySearch;
+          });
+          const totalCronPages = Math.max(1, Math.ceil(filteredCronRuns.length / CRON_PAGE_SIZE));
+          const currentCronPage = Math.min(cronPage, totalCronPages);
+          const paginatedCronRuns = filteredCronRuns.slice((currentCronPage - 1) * CRON_PAGE_SIZE, currentCronPage * CRON_PAGE_SIZE);
+          const selectedCronRun = (adminStats?.recentCronRuns ?? []).find((run) => run.id === selectedCronRunId) ?? null;
+          const cronExportQuery = new URLSearchParams({
+            job: cronJobFilter,
+            source: cronSourceFilter,
+            status: cronStatusFilter,
+            search: cronSearch,
+          }).toString();
 
           return (
             <div className="flex flex-col gap-6">
@@ -1045,6 +1430,262 @@ export default function AdminPage() {
                       </div>
                     ))}
                   </div>
+                </CardBody>
+              </Card>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <p className="font-semibold text-forest-800">Notifieringar senaste 24h</p>
+                  </CardHeader>
+                  <CardBody>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-stone-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-forest-800">{adminStats?.notifications.remindersSent24h ?? 0}</p>
+                        <p className="text-xs text-stone-500 mt-1">Bokningspåminnelser</p>
+                      </div>
+                      <div className="rounded-xl bg-stone-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-forest-800">{adminStats?.notifications.flightWatchNotifications24h ?? 0}</p>
+                        <p className="text-xs text-stone-500 mt-1">Prisvakt-notiser</p>
+                      </div>
+                    </div>
+                  </CardBody>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <p className="font-semibold text-forest-800">Aktiva bevakningar</p>
+                  </CardHeader>
+                  <CardBody>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-stone-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-forest-800">{adminStats?.summary.activeWaitlist ?? activeWaitlist}</p>
+                        <p className="text-xs text-stone-500 mt-1">Väntelista</p>
+                      </div>
+                      <div className="rounded-xl bg-stone-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-forest-800">{adminStats?.summary.activeFlightWatches ?? 0}</p>
+                        <p className="text-xs text-stone-500 mt-1">Prisvakter</p>
+                      </div>
+                    </div>
+                  </CardBody>
+                </Card>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <p className="font-semibold text-forest-800">Senaste bokningspåminnelser</p>
+                  </CardHeader>
+                  <CardBody>
+                    <div className="flex flex-col gap-2">
+                      {(adminStats?.recentReminderEvents ?? []).length === 0 && (
+                        <p className="text-sm text-stone-400">Inga påminnelser loggade ännu.</p>
+                      )}
+                      {(adminStats?.recentReminderEvents ?? []).map((e) => (
+                        <div key={e.id} className="rounded-xl bg-stone-50 px-3 py-2">
+                          <p className="text-sm font-medium text-stone-700">{e.userName ?? "Okänd användare"} ({e.type.replace("DAYS_", "")} dagar)</p>
+                          <p className="text-xs text-stone-500">{formatDateShort(e.checkIn)} → {formatDateShort(e.checkOut)} • {new Date(e.sentAt).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardBody>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <p className="font-semibold text-forest-800">Senaste prisvakt-träffar</p>
+                  </CardHeader>
+                  <CardBody>
+                    <div className="flex flex-col gap-2">
+                      {(adminStats?.recentFlightWatchHits ?? []).length === 0 && (
+                        <p className="text-sm text-stone-400">Inga prisvakt-träffar ännu.</p>
+                      )}
+                      {(adminStats?.recentFlightWatchHits ?? []).map((w) => (
+                        <div key={w.id} className="rounded-xl bg-stone-50 px-3 py-2">
+                          <p className="text-sm font-medium text-stone-700">{w.userName} • {w.origin} → {w.destination}</p>
+                          <p className="text-xs text-stone-500">Maxpris: {w.maxPrice} kr • {w.lastNotifiedAt ? new Date(w.lastNotifiedAt).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" }) : "Ej notifierad"}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardBody>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2 font-semibold text-forest-800">
+                    <Send className="w-4 h-4 text-sand-500" />
+                    Notisjobb (manuell körning)
+                  </div>
+                  <p className="text-sm text-stone-400 mt-1">Används för att testa notifieringar direkt utan att vänta på nästa schemalagda körning.</p>
+                </CardHeader>
+                <CardBody>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      variant="sand"
+                      size="sm"
+                      disabled={runningCronJob !== null}
+                      onClick={() => handleRunCron("flight-watch")}
+                    >
+                      {runningCronJob === "flight-watch" ? "Kör prisvakt..." : "Kör prisvakt nu"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={runningCronJob !== null}
+                      onClick={() => handleRunCron("reminders")}
+                    >
+                      {runningCronJob === "reminders" ? "Kör påminnelser..." : "Kör påminnelser nu"}
+                    </Button>
+                  </div>
+                  {cronResult && (
+                    <p className="mt-3 text-sm text-stone-600 bg-stone-50 rounded-xl px-3 py-2">
+                      {cronResult}
+                    </p>
+                  )}
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2 font-semibold text-forest-800">
+                    <BarChart2 className="w-4 h-4 text-sand-500" />
+                    Cron-jobbhistorik
+                  </div>
+                  <p className="text-sm text-stone-400 mt-1">Senaste körningarna, inklusive schemalagda och manuella jobb.</p>
+                </CardHeader>
+                <CardBody>
+                  <div className="grid md:grid-cols-4 gap-2 mb-3">
+                    <select
+                      value={cronJobFilter}
+                      onChange={(e) => {
+                        setCronJobFilter(e.target.value as "ALL" | "REMINDERS" | "FLIGHT_WATCH");
+                        setCronPage(1);
+                      }}
+                      className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-sand-400"
+                    >
+                      <option value="ALL">Alla jobb</option>
+                      <option value="FLIGHT_WATCH">Prisvakt</option>
+                      <option value="REMINDERS">Påminnelser</option>
+                    </select>
+                    <select
+                      value={cronSourceFilter}
+                      onChange={(e) => {
+                        setCronSourceFilter(e.target.value as "ALL" | "SCHEDULED" | "MANUAL");
+                        setCronPage(1);
+                      }}
+                      className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-sand-400"
+                    >
+                      <option value="ALL">Alla källor</option>
+                      <option value="MANUAL">Manuell</option>
+                      <option value="SCHEDULED">Schemalagd</option>
+                    </select>
+                    <select
+                      value={cronStatusFilter}
+                      onChange={(e) => {
+                        setCronStatusFilter(e.target.value as "ALL" | "SUCCESS" | "ERROR");
+                        setCronPage(1);
+                      }}
+                      className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-sand-400"
+                    >
+                      <option value="ALL">Alla status</option>
+                      <option value="SUCCESS">OK</option>
+                      <option value="ERROR">Fel</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={cronSearch}
+                      onChange={(e) => {
+                        setCronSearch(e.target.value);
+                        setCronPage(1);
+                      }}
+                      placeholder="Sök feltext/jobbnamn..."
+                      className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sand-400"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    {filteredCronRuns.length === 0 && (
+                      <p className="text-sm text-stone-400">Ingen historik ännu.</p>
+                    )}
+                    <div className="flex justify-end">
+                      <a
+                        href={`/api/admin/stats/cron-runs/export?${cronExportQuery}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-stone-500 border border-stone-200 hover:bg-stone-50 transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Exportera CSV
+                      </a>
+                    </div>
+                    {paginatedCronRuns.map((run) => (
+                      <div key={run.id} className="rounded-xl bg-stone-50 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-stone-700">
+                            {run.job === "FLIGHT_WATCH" ? "Prisvakt" : "Påminnelser"} • {run.source === "MANUAL" ? "Manuell" : "Schemalagd"}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${run.status === "SUCCESS" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                              {run.status === "SUCCESS" ? "OK" : "Fel"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCronRunId((prev) => (prev === run.id ? null : run.id))}
+                              className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-600 hover:bg-stone-100"
+                            >
+                              {selectedCronRunId === run.id ? "Dölj" : "Detaljer"}
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-stone-500 mt-0.5">
+                          {new Date(run.createdAt).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
+                          {typeof run.durationMs === "number" ? ` • ${run.durationMs} ms` : ""}
+                        </p>
+                        {run.error && <p className="text-xs text-red-600 mt-1">{run.error}</p>}
+                      </div>
+                    ))}
+
+                    {filteredCronRuns.length > 0 && (
+                      <div className="flex items-center justify-between pt-1">
+                        <p className="text-xs text-stone-400">
+                          Sida {currentCronPage} av {totalCronPages} • {filteredCronRuns.length} träffar
+                        </p>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={currentCronPage <= 1}
+                            onClick={() => setCronPage((p) => Math.max(1, p - 1))}
+                          >
+                            Föregående
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={currentCronPage >= totalCronPages}
+                            onClick={() => setCronPage((p) => Math.min(totalCronPages, p + 1))}
+                          >
+                            Nästa
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedCronRun && (
+                    <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
+                      <p className="text-sm font-semibold text-forest-800 mb-2">Detaljerad kördata</p>
+                      <div className="grid md:grid-cols-2 gap-2 text-xs text-stone-600 mb-3">
+                        <p><span className="font-semibold">Jobb:</span> {selectedCronRun.job}</p>
+                        <p><span className="font-semibold">Källa:</span> {selectedCronRun.source}</p>
+                        <p><span className="font-semibold">Status:</span> {selectedCronRun.status}</p>
+                        <p><span className="font-semibold">Duration:</span> {selectedCronRun.durationMs ?? "-"} ms</p>
+                      </div>
+                      <p className="text-xs font-semibold text-stone-700 mb-1">Resultat (JSON)</p>
+                      <pre className="text-[11px] leading-4 bg-stone-50 border border-stone-200 rounded-xl p-3 overflow-auto max-h-64 text-stone-700">
+{JSON.stringify(selectedCronRun.result ?? {}, null, 2)}
+                      </pre>
+                    </div>
+                  )}
                 </CardBody>
               </Card>
             </div>

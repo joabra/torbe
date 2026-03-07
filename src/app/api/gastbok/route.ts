@@ -3,13 +3,25 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 
 export async function GET() {
+  const session = await auth();
+  const userId = session?.user ? (session.user as { id: string }).id : null;
+
   const entries = await prisma.guestbookEntry.findMany({
     orderBy: { createdAt: "desc" },
     include: {
       author: { select: { id: true, name: true } },
+      likes: { select: { userId: true } },
     },
   });
-  return NextResponse.json(entries);
+
+  return NextResponse.json(
+    entries.map((e) => ({
+      ...e,
+      likeCount: e.likes.length,
+      userLiked: userId ? e.likes.some((l) => l.userId === userId) : false,
+      likes: undefined,
+    }))
+  );
 }
 
 export async function POST(req: Request) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { emailUserBookingStatus } from "@/lib/email";
+import { notifyWaitlistForOpenedDates } from "@/lib/waitlist";
 
 export const maxDuration = 30;
 import { z } from "zod";
@@ -23,6 +24,9 @@ export async function PATCH(
 
   try {
     const { id } = await params;
+    const existing = await prisma.booking.findUnique({ where: { id } });
+    if (!existing) return NextResponse.json({ error: "Bokning hittades inte" }, { status: 404 });
+
     const body = await req.json();
     const parsed = schema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Ogiltiga uppgifter" }, { status: 400 });
@@ -31,16 +35,13 @@ export async function PATCH(
 
     // If approving, check for overlaps with other approved bookings
     if (status === "APPROVED") {
-      const booking = await prisma.booking.findUnique({ where: { id } });
-      if (!booking) return NextResponse.json({ error: "Bokning hittades inte" }, { status: 404 });
-
       const overlap = await prisma.booking.findFirst({
         where: {
           id: { not: id },
           status: "APPROVED",
           AND: [
-            { checkIn: { lt: booking.checkOut } },
-            { checkOut: { gt: booking.checkIn } },
+            { checkIn: { lt: existing.checkOut } },
+            { checkOut: { gt: existing.checkIn } },
           ],
         },
       });
@@ -64,6 +65,11 @@ export async function PATCH(
       );
     }
 
+    // If an already approved booking is changed away from APPROVED, dates opened up.
+    if (existing.status === "APPROVED" && status !== "APPROVED") {
+      await notifyWaitlistForOpenedDates(existing.checkIn, existing.checkOut);
+    }
+
     return NextResponse.json(updated);
   } catch {
     return NextResponse.json({ error: "Serverfel" }, { status: 500 });
@@ -85,7 +91,17 @@ export async function DELETE(
 
   if (role === "ADMIN") {
     // Admin kan radera alla bokningar
+    const booking = await prisma.booking.findUnique({ where: { id } });
+    if (!booking) {
+      return NextResponse.json({ error: "Bokning hittades inte" }, { status: 404 });
+    }
+
     await prisma.booking.delete({ where: { id } });
+
+    if (booking.status === "APPROVED") {
+      await notifyWaitlistForOpenedDates(booking.checkIn, booking.checkOut);
+    }
+
     return NextResponse.json({ ok: true });
   }
 
