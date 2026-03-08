@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Torbe — Logga in</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #f5f0e8 0%, #e8dfd4 50%, #d4c9b8 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+      position: relative;
+    }
+
+    /* ── Character area ── */
+    .character-stage {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      height: 160px;
+      margin-bottom: -10px;
+      z-index: 2;
+      overflow: visible;
+    }
+
+    .character {
+      position: absolute;
+      bottom: -30px;
+      width: 180px;
+      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  filter 0.4s ease;
+      transform-origin: center bottom;
+      will-change: transform;
+    }
+
+    .character svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    /* ── SVG element transitions ── */
+    .eyelid {
+      transition: transform 0.25s ease;
+    }
+
+    #browL, #browR {
+      transition: transform 0.35s ease;
+      transform-box: fill-box;
+      transform-origin: center center;
+    }
+
+    #mouthSmile, #mouthHappy, #mouthSad,
+    #teethSmile, #teethHappy {
+      transition: opacity 0.25s ease;
+    }
+
+    /* ── Character states ── */
+    .character.state-idle {
+      transform: translateY(0) scale(1) rotate(0deg);
+    }
+
+    .character.state-watching {
+      transform: translateY(-8px) scale(1.05) rotate(-2deg);
+    }
+
+    .character.state-peeking {
+      transform: translateY(35px) scale(0.97) rotate(2deg);
+    }
+
+    .character.state-happy {
+      animation: happyBounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) infinite alternate;
+    }
+
+    @keyframes happyBounce {
+      0% { transform: translateY(0) scale(1) rotate(-3deg); }
+      100% { transform: translateY(-25px) scale(1.08) rotate(3deg); }
+    }
+
+    .character.state-sad {
+      animation: sadShake 0.6s ease;
+      filter: saturate(0.6) brightness(0.92);
+    }
+
+    @keyframes sadShake {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      10% { transform: translateX(-8px) rotate(-3deg); }
+      20% { transform: translateX(7px) rotate(2deg); }
+      30% { transform: translateX(-6px) rotate(-2deg); }
+      40% { transform: translateX(5px) rotate(1.5deg); }
+      50% { transform: translateX(-4px) rotate(-1deg); }
+      60% { transform: translateX(3px) rotate(0.5deg); }
+      70% { transform: translateX(-2px); }
+      80% { transform: translateY(4px); }
+    }
+
+    .character.state-sad-droop {
+      transform: translateY(12px) scale(0.97) rotate(3deg);
+      filter: saturate(0.6) brightness(0.92);
+    }
+
+    .character.tilt-active {
+      transition: transform 0.15s ease-out;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: white;
+      border-radius: 24px;
+      padding: 40px 32px 32px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+      position: relative;
+      z-index: 4;
+    }
+
+    .card h1 {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 700;
+      color: #2d3a2e;
+      margin-bottom: 4px;
+    }
+
+    .card .subtitle {
+      text-align: center;
+      font-size: 14px;
+      color: #8a8a8a;
+      margin-bottom: 28px;
+    }
+
+    .form-group { margin-bottom: 18px; }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #4a5a4a;
+      margin-bottom: 6px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #e8e2d8;
+      border-radius: 14px;
+      font-size: 16px;
+      background: #faf8f5;
+      color: #2d3a2e;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .form-group input:focus {
+      border-color: #c9b896;
+      box-shadow: 0 0 0 4px rgba(201, 184, 150, 0.15);
+    }
+
+    .form-group input::placeholder { color: #bbb; }
+
+    .btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      color: white;
+      background: linear-gradient(135deg, #c9a96e 0%, #b08d4f 100%);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s;
+      margin-top: 8px;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(176, 141, 79, 0.3);
+    }
+
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .message {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .message.error {
+      display: flex;
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+
+    .message.success {
+      display: flex;
+      background: #f0fdf4;
+      color: #15803d;
+      border: 1px solid #bbf7d0;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card.shake { animation: cardShake 0.5s ease; }
+
+    @keyframes cardShake {
+      0%, 100% { transform: translateX(0); }
+      12% { transform: translateX(-10px); }
+      25% { transform: translateX(8px); }
+      37% { transform: translateX(-6px); }
+      50% { transform: translateX(5px); }
+      62% { transform: translateX(-3px); }
+      75% { transform: translateX(2px); }
+    }
+
+    .confetti-container {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    .confetti-piece {
+      position: absolute;
+      top: -20px;
+      animation: confettiFall 2.5s ease-out forwards;
+    }
+
+    @keyframes confettiFall {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    }
+
+    .footer-text {
+      text-align: center;
+      font-size: 13px;
+      color: #8a8a8a;
+      margin-top: 20px;
+    }
+
+    .footer-text a {
+      color: #4a5a4a;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .footer-text a:hover { text-decoration: underline; }
+
+    .demo-hint {
+      text-align: center;
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-container">
+  <div class="character-stage">
+    <div class="character state-idle" id="character">
+      <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <defs>
+          <!-- Clip paths keep animated iris inside the PNG eye opening -->
+          <clipPath id="eyeClipL">
+            <ellipse cx="0" cy="0" rx="44" ry="22"/>
+          </clipPath>
+          <clipPath id="eyeClipR">
+            <ellipse cx="0" cy="0" rx="62" ry="19"/>
+          </clipPath>
+        </defs>
+
+        <!-- The actual PNG image as the base -->
+        <image href="/icon-512.png" x="0" y="0" width="512" height="512"/>
+
+        <!-- Cover ONLY the static iris/pupil — sclera (eye white) stays from PNG -->
+        <!-- Left iris cover: sclera-colored disc at PNG iris center -->
+        <circle cx="207" cy="223" r="16" fill="#f0f4fb"/>
+        <!-- Right iris cover: sclera-colored disc at PNG iris center (325,213) -->
+        <circle cx="325" cy="213" r="15" fill="#edf2f9"/>
+
+        <!-- Left eye: group centered at left iris rest position -->
+        <g clip-path="url(#eyeClipL)" transform="translate(210, 225) rotate(-8)">
+          <circle id="irisL" cx="0" cy="0" r="11" fill="#3080c0"/>
+          <circle id="pupilL" cx="0" cy="1" r="5" fill="#0a0e18"/>
+          <circle cx="-3" cy="-3" r="2.5" fill="white" opacity="0.55"/>
+        </g>
+
+        <!-- Right eye: group centered at right iris rest position (325,213) from pixel analysis -->
+        <g clip-path="url(#eyeClipR)" transform="translate(325, 213)">
+          <circle id="irisR" cx="0" cy="0" r="11" fill="#3080c0"/>
+          <circle id="pupilR" cx="0" cy="1" r="5" fill="#0a0e18"/>
+          <circle cx="-3" cy="-3" r="2.5" fill="white" opacity="0.55"/>
+        </g>
+
+        <!-- Eyebrows (invisible by default, shown for expressions) -->
+        <path id="browL" d="M185,205 Q200,195 215,197 Q230,199 240,206" fill="none" stroke="none" stroke-width="0" stroke-linecap="round" opacity="0"/>
+        <path id="browR" d="M310,200 Q325,190 340,192 Q355,194 365,202" fill="none" stroke="none" stroke-width="0" stroke-linecap="round" opacity="0"/>
+
+        <!-- Mouth overlays (hidden by default, appear for happy/sad) -->
+        <path id="mouthSmile" d="M0,0" fill="none" opacity="0"/>
+        <path id="teethSmile" d="M0,0" fill="none" opacity="0"/>
+        <path id="mouthHappy" d="M210,345 Q240,380 270,380 Q300,380 330,345 Z" fill="#7a2828" stroke="#2d1a0e" stroke-width="3" opacity="0"/>
+        <path id="teethHappy" d="M220,348 L240,345 L240,356 L220,352Z M240,345 L260,343 L260,355 L240,356Z M260,343 L280,343 L280,355 L260,355Z" fill="#f0ece0" opacity="0"/>
+        <path id="mouthSad" d="M220,370 Q250,350 270,348 Q290,350 320,370" fill="none" stroke="#2d1a0e" stroke-width="4" stroke-linecap="round" opacity="0"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Login card -->
+  <div class="card" id="card">
+    <h1>Logga in</h1>
+    <p class="subtitle">Välkommen tillbaka till familjen ☀️</p>
+
+    <div class="message" id="message"></div>
+
+    <form id="loginForm" autocomplete="off">
+      <div class="form-group">
+        <label for="email">E-postadress</label>
+        <input type="email" id="email" placeholder="din@epost.se" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="password">Lösenord</label>
+        <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn" id="submitBtn">Logga in</button>
+    </form>
+
+    <p class="footer-text">Inte med ännu? <a href="#">Skapa konto</a></p>
+    <p class="demo-hint">Demo: test@torbe.se / torbe123</p>
+  </div>
+</div>
+
+<div class="confetti-container" id="confetti"></div>
+
+<script>
+(function() {
+  var emailInput = document.getElementById('email');
+  var passwordInput = document.getElementById('password');
+  var form = document.getElementById('loginForm');
+  var card = document.getElementById('card');
+  var msg = document.getElementById('message');
+  var submitBtn = document.getElementById('submitBtn');
+  var character = document.getElementById('character');
+  var confettiContainer = document.getElementById('confetti');
+
+  var irisL = document.getElementById('irisL');
+  var irisR = document.getElementById('irisR');
+  var pupilL = document.getElementById('pupilL');
+  var pupilR = document.getElementById('pupilR');
+  var browL = document.getElementById('browL');
+  var browR = document.getElementById('browR');
+  var mouthSmile = document.getElementById('mouthSmile');
+  var teethSmile = document.getElementById('teethSmile');
+  var mouthHappy = document.getElementById('mouthHappy');
+  var teethHappy = document.getElementById('teethHappy');
+  var mouthSad = document.getElementById('mouthSad');
+
+  var state = 'idle';
+  var mouseX = 0;
+  var mouseY = 0;
+  var tiltRAF = null;
+
+  var EL = { ix: 0, iy: 0, px: 0, py: 1 };
+  var ER = { ix: 0, iy: 0, px: 0, py: 1 };
+
+  function resetBrows() {
+    browL.style.transform = '';
+    browR.style.transform = '';
+  }
+
+  function raiseBrows() {
+    browL.style.transform = 'translateY(-15px)';
+    browR.style.transform = 'translateY(-15px)';
+  }
+
+  function sadBrows() {
+    browL.style.transform = 'rotate(-10deg) translateY(8px)';
+    browR.style.transform = 'rotate(10deg) translateY(8px)';
+  }
+
+  function showSmile() {
+    mouthSmile.style.opacity = '0';
+    teethSmile.style.opacity = '0';
+    mouthHappy.style.opacity = '0';
+    teethHappy.style.opacity = '0';
+    mouthSad.style.opacity = '0';
+  }
+
+  function showHappyMouth() {
+    mouthSmile.style.opacity = '0';
+    teethSmile.style.opacity = '0';
+    mouthHappy.style.opacity = '1';
+    teethHappy.style.opacity = '1';
+    mouthSad.style.opacity = '0';
+  }
+
+  function showSadMouth() {
+    mouthSmile.style.opacity = '0';
+    teethSmile.style.opacity = '0';
+    mouthHappy.style.opacity = '0';
+    teethHappy.style.opacity = '0';
+    mouthSad.style.opacity = '1';
+  }
+
+  function resetEyePos() {
+    irisL.setAttribute('cx', EL.ix);
+    irisL.setAttribute('cy', EL.iy);
+    pupilL.setAttribute('cx', EL.px);
+    pupilL.setAttribute('cy', EL.py);
+    irisR.setAttribute('cx', ER.ix);
+    irisR.setAttribute('cy', ER.iy);
+    pupilR.setAttribute('cx', ER.px);
+    pupilR.setAttribute('cy', ER.py);
+  }
+
+  function setState(newState) {
+    state = newState;
+    if (tiltRAF) { cancelAnimationFrame(tiltRAF); tiltRAF = null; }
+    character.style.transform = '';
+    character.className = 'character';
+    resetBrows();
+    showSmile();
+
+    switch (newState) {
+      case 'idle':
+        character.classList.add('state-idle');
+        break;
+
+      case 'watching':
+        character.classList.add('state-watching', 'tilt-active');
+        startTiltTracking();
+        break;
+
+      case 'peeking':
+        character.classList.add('state-peeking');
+        resetEyePos();
+        break;
+
+      case 'happy':
+        character.classList.add('state-happy');
+        raiseBrows();
+        showHappyMouth();
+        resetEyePos();
+        spawnConfetti();
+        break;
+
+      case 'sad':
+        character.classList.add('state-sad');
+        sadBrows();
+        showSadMouth();
+        irisL.setAttribute('cy', EL.iy + 7);
+        pupilL.setAttribute('cy', EL.py + 7);
+        irisR.setAttribute('cy', ER.iy + 7);
+        pupilR.setAttribute('cy', ER.py + 7);
+        card.classList.add('shake');
+        card.addEventListener('animationend', function() { card.classList.remove('shake'); }, { once: true });
+        setTimeout(function() {
+          if (state === 'sad') {
+            character.className = 'character state-sad-droop';
+            character.style.transform = '';
+          }
+        }, 650);
+        break;
+    }
+  }
+
+  function updateEyes() {
+    if (state !== 'happy' && state !== 'sad') {
+      var rect = character.getBoundingClientRect();
+      var scaleX = rect.width / 512;
+      var scaleY = rect.height / 512;
+      var eyeCX = rect.left + 275 * scaleX;
+      var eyeCY = rect.top + 216 * scaleY;
+
+      var dx = mouseX - eyeCX;
+      var dy = mouseY - eyeCY;
+      var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+      var maxIris = 8;
+      var maxPupil = 10;
+      var factor = Math.min(1, dist / 250);
+
+      var iox = (dx / dist) * maxIris * factor;
+      var ioy = (dy / dist) * maxIris * factor * 0.6;
+      var pox = (dx / dist) * maxPupil * factor;
+      var poy = (dy / dist) * maxPupil * factor * 0.6;
+
+      irisL.setAttribute('cx', EL.ix + iox);
+      irisL.setAttribute('cy', EL.iy + ioy);
+      pupilL.setAttribute('cx', EL.px + pox);
+      pupilL.setAttribute('cy', EL.py + poy);
+
+      irisR.setAttribute('cx', ER.ix + iox);
+      irisR.setAttribute('cy', ER.iy + ioy);
+      pupilR.setAttribute('cx', ER.px + pox);
+      pupilR.setAttribute('cy', ER.py + poy);
+    }
+    requestAnimationFrame(updateEyes);
+  }
+  requestAnimationFrame(updateEyes);
+
+  function startTiltTracking() {
+    function tick() {
+      if (state !== 'watching') return;
+      var rect = character.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var dx = mouseX - cx;
+      var maxTilt = 6;
+      var rotateY = Math.max(-maxTilt, Math.min(maxTilt, dx * 0.02));
+      var translateX = Math.max(-4, Math.min(4, dx * 0.008));
+      character.style.transform =
+        'translateY(-8px) scale(1.05) rotate(' + (-2 + rotateY * 0.3) + 'deg) translateX(' + translateX + 'px)';
+      tiltRAF = requestAnimationFrame(tick);
+    }
+    tiltRAF = requestAnimationFrame(tick);
+  }
+
+  document.addEventListener('mousemove', function(e) {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
+
+  function trackToEmail() {
+    if (state !== 'watching') return;
+    var rect = emailInput.getBoundingClientRect();
+    var textWidth = emailInput.value.length * 8;
+    mouseX = rect.left + Math.min(textWidth + 16, rect.width - 10);
+    mouseY = rect.top + rect.height / 2;
+  }
+
+  function spawnConfetti() {
+    var colors = ['#c9a96e', '#e8806a', '#4a90d9', '#15803d', '#f4b89a', '#b05a3a', '#fbbf24', '#e09070'];
+    for (var i = 0; i < 60; i++) {
+      var piece = document.createElement('div');
+      piece.className = 'confetti-piece';
+      piece.style.left = Math.random() * 100 + '%';
+      piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+      piece.style.width = (Math.random() * 8 + 5) + 'px';
+      piece.style.height = (Math.random() * 8 + 5) + 'px';
+      piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+      piece.style.animationDelay = (Math.random() * 1.2) + 's';
+      piece.style.animationDuration = (Math.random() * 1.5 + 2) + 's';
+      confettiContainer.appendChild(piece);
+    }
+    setTimeout(function() { confettiContainer.innerHTML = ''; }, 4000);
+  }
+
+  emailInput.addEventListener('focus', function() {
+    hideMessage();
+    setState('watching');
+    trackToEmail();
+  });
+
+  emailInput.addEventListener('input', trackToEmail);
+
+  emailInput.addEventListener('blur', function() {
+    if (state === 'watching') setState('idle');
+  });
+
+  passwordInput.addEventListener('focus', function() {
+    hideMessage();
+    setState('peeking');
+  });
+
+  passwordInput.addEventListener('blur', function() {
+    if (state === 'peeking') setState('idle');
+  });
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var email = emailInput.value.trim();
+    var pass = passwordInput.value;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Kontrollerar...';
+
+    setTimeout(function() {
+      if (email === 'test@torbe.se' && pass === 'torbe123') {
+        setState('happy');
+        showMessage('V\u00e4lkommen tillbaka! \ud83c\udf89', 'success');
+        submitBtn.textContent = 'V\u00e4lkommen!';
+        setTimeout(function() {
+          setState('idle');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Logga in';
+        }, 4000);
+      } else {
+        setState('sad');
+        showMessage('Fel e-post eller l\u00f6senord \u2014 f\u00f6rs\u00f6k igen!', 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Logga in';
+        setTimeout(function() {
+          if (state === 'sad') setState('idle');
+        }, 2500);
+      }
+    }, 800);
+  });
+
+  function showMessage(text, type) {
+    msg.textContent = text;
+    msg.className = 'message ' + type;
+  }
+
+  function hideMessage() {
+    msg.className = 'message';
+    msg.textContent = '';
+  }
+
+  setState('idle');
+})();
+</script>
+</body>
+</html>

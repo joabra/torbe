@@ -1,12 +1,10 @@
 "use client";
-import { useState, Suspense } from "react";
+import { useState, useCallback, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Leaf, AlertCircle, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Card, CardBody } from "@/components/ui/Card";
+import { AlertCircle, ShieldCheck } from "lucide-react";
+import { JanCharacter, type CharacterState } from "@/components/JanCharacter";
 
 function LoggaInForm() {
   const router = useRouter();
@@ -19,13 +17,20 @@ function LoggaInForm() {
   const [step, setStep] = useState<"credentials" | "mfa">("credentials");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [charState, setCharState] = useState<CharacterState>("idle");
+  const [cardShake, setCardShake] = useState(false);
+
+  const handleCardShake = useCallback(() => {
+    setCardShake(true);
+    setTimeout(() => setCardShake(false), 600);
+  }, []);
 
   async function handleCredentials(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setCharState("idle");
 
-    // Kontrollera om MFA krävs utan att logga in (försök utan mfaCode)
     const result = await signIn("credentials", {
       email,
       password,
@@ -36,13 +41,10 @@ function LoggaInForm() {
     setLoading(false);
 
     if (!result?.error) {
-      // Inloggning lyckades utan MFA (bör ej hända för nya konton, men fallback)
-      router.push(callbackUrl);
+      setCharState("happy");
+      setTimeout(() => router.push(callbackUrl), 1500);
       router.refresh();
     } else {
-      // Fel — kan vara felaktiga uppgifter ELLER MFA krävs
-      // Vi vet inte vilket, men vi ber om MFA-kod ändå om e-post/lösenord ser rimliga ut
-      // För att avgöra: försök att validera via ett separat endpoint
       const check = await fetch("/api/auth/check-mfa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -51,18 +53,25 @@ function LoggaInForm() {
       if (check.ok) {
         const data = await check.json();
         if (data.notApproved) {
+          setCharState("sad");
           setError("Ditt konto väntar på godkännande av administratören. Du får ett e-postmeddelande när det är klart.");
+          setTimeout(() => setCharState("idle"), 2500);
         } else if (data.mfaRequired) {
           setStep("mfa");
+          setCharState("idle");
         } else if (data.valid) {
-          // Inloggning utan MFA (gammal admin/seed-konto)
-          router.push(callbackUrl);
+          setCharState("happy");
+          setTimeout(() => router.push(callbackUrl), 1500);
           router.refresh();
         } else {
+          setCharState("sad");
           setError("Fel e-post eller lösenord");
+          setTimeout(() => setCharState("idle"), 2500);
         }
       } else {
+        setCharState("sad");
         setError("Fel e-post eller lösenord");
+        setTimeout(() => setCharState("idle"), 2500);
       }
     }
   }
@@ -71,6 +80,7 @@ function LoggaInForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setCharState("idle");
 
     const result = await signIn("credentials", {
       email,
@@ -82,97 +92,167 @@ function LoggaInForm() {
     setLoading(false);
 
     if (result?.error) {
+      setCharState("sad");
       setError("Felaktig engångskod — kontrollera appen och försök igen");
+      setTimeout(() => setCharState("idle"), 2500);
     } else {
-      router.push(callbackUrl);
+      setCharState("happy");
+      setTimeout(() => router.push(callbackUrl), 1500);
       router.refresh();
     }
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center px-6 py-20">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 text-forest-800 font-bold text-xl">
-            <Leaf className="w-6 h-6 text-sand-500" />
-            Torbe
-          </Link>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #f5f0e8 0%, #e8dfd4 50%, #d4c9b8 100%)', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', overflow: 'hidden', padding: '20px' }}>
+      <style>{`
+        @keyframes janCardShake {
+          0%,100% { transform: translateX(0); }
+          12% { transform: translateX(-10px); }
+          25% { transform: translateX(8px); }
+          37% { transform: translateX(-6px); }
+          50% { transform: translateX(5px); }
+          62% { transform: translateX(-3px); }
+          75% { transform: translateX(2px); }
+        }
+        .jan-login-input {
+          width: 100%;
+          padding: 14px 16px;
+          border: 2px solid #e8e2d8;
+          border-radius: 14px;
+          font-size: 16px;
+          background: #faf8f5;
+          color: #2d3a2e;
+          outline: none;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
+          box-sizing: border-box;
+        }
+        .jan-login-input:focus {
+          border-color: #c9b896;
+          box-shadow: 0 0 0 4px rgba(201, 184, 150, 0.15);
+        }
+        .jan-login-input::placeholder { color: #bbb; }
+        .jan-login-btn {
+          width: 100%;
+          padding: 16px;
+          border: none;
+          border-radius: 14px;
+          font-size: 16px;
+          font-weight: 700;
+          color: white;
+          background: linear-gradient(135deg, #c9a96e 0%, #b08d4f 100%);
+          cursor: pointer;
+          transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s;
+          margin-top: 8px;
+        }
+        .jan-login-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(176, 141, 79, 0.3);
+        }
+        .jan-login-btn:active:not(:disabled) { transform: translateY(0); }
+        .jan-login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      `}</style>
+
+      <div style={{ width: '100%', maxWidth: 420 }}>
+        {/* Character */}
+        <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', height: 160, marginBottom: -10, zIndex: 2 }}>
+          <JanCharacter state={charState} emailValue={email} onCardShake={handleCardShake} />
+        </div>
+
+        {/* Card */}
+        <div style={{ background: 'white', borderRadius: 24, padding: '40px 32px 32px', boxShadow: '0 20px 60px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)', position: 'relative', zIndex: 4, animation: cardShake ? 'janCardShake 0.6s ease' : undefined }}>
           {step === "credentials" ? (
             <>
-              <h1 className="mt-4 text-3xl font-bold text-forest-900">Logga in</h1>
-              <p className="mt-2 text-stone-500 text-sm">Välkommen tillbaka till familjen</p>
+              <h1 style={{ textAlign: 'center', fontSize: 24, fontWeight: 700, color: '#2d3a2e', marginBottom: 4, marginTop: 0 }}>Logga in</h1>
+              <p style={{ textAlign: 'center', fontSize: 14, color: '#8a8a8a', marginBottom: 28, marginTop: 0 }}>Välkommen tillbaka till familjen ☀️</p>
+
+              {error && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderRadius: 12, fontSize: 14, marginBottom: 16, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+                  <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />{error}
+                </div>
+              )}
+
+              <form onSubmit={handleCredentials} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#4a5a4a', marginBottom: 6 }}>E-postadress</label>
+                  <input
+                    className="jan-login-input"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onFocus={() => { setError(""); setCharState("watching"); }}
+                    onBlur={() => { if (charState === "watching") setCharState("idle"); }}
+                    placeholder="din@epost.se"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#4a5a4a', marginBottom: 6 }}>Lösenord</label>
+                  <input
+                    className="jan-login-input"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onFocus={() => { setError(""); setCharState("peeking"); }}
+                    onBlur={() => { if (charState === "peeking") setCharState("idle"); }}
+                    placeholder="••••••••"
+                  />
+                </div>
+
+                <button type="submit" className="jan-login-btn" disabled={loading}>
+                  {loading ? "Kontrollerar..." : "Fortsätt"}
+                </button>
+              </form>
+
+              <p style={{ textAlign: 'center', fontSize: 13, color: '#8a8a8a', marginTop: 20, marginBottom: 0 }}>
+                Inte med ännu?{" "}
+                <Link href="/registrera" style={{ color: '#4a5a4a', fontWeight: 600, textDecoration: 'none' }}>Skapa konto</Link>
+              </p>
             </>
           ) : (
             <>
-              <h1 className="mt-4 text-3xl font-bold text-forest-900">Tvåstegsverifiering</h1>
-              <p className="mt-2 text-stone-500 text-sm">Ange koden från din autentiseringsapp</p>
-            </>
-          )}
-        </div>
+              <h1 style={{ textAlign: 'center', fontSize: 24, fontWeight: 700, color: '#2d3a2e', marginBottom: 4, marginTop: 0 }}>Tvåstegsverifiering</h1>
+              <p style={{ textAlign: 'center', fontSize: 14, color: '#8a8a8a', marginBottom: 28, marginTop: 0 }}>Ange koden från din autentiseringsapp</p>
 
-        <Card>
-          <CardBody>
-            {step === "credentials" ? (
-              <form onSubmit={handleCredentials} className="flex flex-col gap-4">
-                <Input id="email" label="E-postadress" type="email" autoComplete="email" required
-                  value={email} onChange={(e) => setEmail(e.target.value)} placeholder="din@epost.se" />
-                <Input id="password" label="Lösenord" type="password" autoComplete="current-password" required
-                  value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+              {error && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderRadius: 12, fontSize: 14, marginBottom: 16, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+                  <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />{error}
+                </div>
+              )}
 
-                {error && (
-                  <div className="flex items-center gap-2 bg-red-50 text-red-700 rounded-xl px-4 py-3 text-sm">
-                    <AlertCircle className="w-4 h-4 shrink-0" />{error}
-                  </div>
-                )}
-
-                <Button type="submit" variant="sand" size="lg" disabled={loading} className="w-full mt-2">
-                  {loading ? "Kontrollerar..." : "Fortsätt"}
-                </Button>
-              </form>
-            ) : (
-              <form onSubmit={handleMfa} className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 bg-forest-50 rounded-xl px-4 py-3 text-sm text-forest-700">
-                  <ShieldCheck className="w-5 h-5 shrink-0 text-forest-600" />
+              <form onSubmit={handleMfa} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f0fdf4', borderRadius: 12, padding: '12px 16px', fontSize: 14, color: '#15803d' }}>
+                  <ShieldCheck style={{ width: 20, height: 20, flexShrink: 0 }} />
                   <span>Öppna din autentiseringsapp och ange den 6-siffriga koden för <strong>Torbe</strong>.</span>
                 </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#4a5a4a', marginBottom: 6 }}>6-siffrig kod</label>
+                  <input
+                    className="jan-login-input"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    required
+                    maxLength={6}
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="123456"
+                  />
+                </div>
 
-                <Input
-                  id="mfaCode"
-                  label="6-siffrig kod"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  required
-                  maxLength={6}
-                  value={mfaCode}
-                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="123456"
-                />
-
-                {error && (
-                  <div className="flex items-center gap-2 bg-red-50 text-red-700 rounded-xl px-4 py-3 text-sm">
-                    <AlertCircle className="w-4 h-4 shrink-0" />{error}
-                  </div>
-                )}
-
-                <Button type="submit" variant="sand" size="lg" disabled={loading || mfaCode.length < 6} className="w-full mt-2">
+                <button type="submit" className="jan-login-btn" disabled={loading || mfaCode.length < 6}>
                   {loading ? "Verifierar..." : "Logga in"}
-                </Button>
-                <button type="button" onClick={() => { setStep("credentials"); setError(""); setMfaCode(""); }}
-                  className="text-sm text-stone-400 hover:text-stone-600 text-center">
+                </button>
+                <button type="button" onClick={() => { setStep("credentials"); setError(""); setMfaCode(""); setCharState("idle"); }}
+                  style={{ fontSize: 14, color: '#aaa', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'center' }}>
                   ← Tillbaka
                 </button>
               </form>
-            )}
-          </CardBody>
-        </Card>
-
-        {step === "credentials" && (
-          <p className="text-center text-sm text-stone-500 mt-6">
-            Inte med ännu?{" "}
-            <Link href="/registrera" className="text-forest-700 font-semibold hover:underline">Skapa konto</Link>
-          </p>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
