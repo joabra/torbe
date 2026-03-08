@@ -205,6 +205,13 @@ export function JanCharacter({ state, emailValue, onCardShake }: Props) {
           70%  { transform: translateX(-2px); }
           80%  { transform: translateY(4px); }
         }
+        .jan-character .jan-hands {
+          transform: translateY(220px);
+          transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .jan-character.state-peeking .jan-hands {
+          transform: translateY(0px);
+        }
         .jan-confetti-piece {
           position: absolute;
           top: -20px;
@@ -225,6 +232,34 @@ export function JanCharacter({ state, emailValue, onCardShake }: Props) {
             <clipPath id="eyeClipR">
               <ellipse cx="0" cy="0" rx="62" ry="19"/>
             </clipPath>
+
+            {/* Hand gradients */}
+            <radialGradient id="handGradL" cx="55%" cy="40%" r="55%">
+              <stop offset="0%" stopColor="#e07550"/>
+              <stop offset="40%" stopColor="#c85e32"/>
+              <stop offset="100%" stopColor="#a84820"/>
+            </radialGradient>
+            <radialGradient id="handGradR" cx="45%" cy="40%" r="55%">
+              <stop offset="0%" stopColor="#e07550"/>
+              <stop offset="40%" stopColor="#c85e32"/>
+              <stop offset="100%" stopColor="#a84820"/>
+            </radialGradient>
+            <radialGradient id="fingerGradL" cx="50%" cy="30%" r="60%">
+              <stop offset="0%" stopColor="#e8845c"/>
+              <stop offset="100%" stopColor="#bf5828"/>
+            </radialGradient>
+            <radialGradient id="fingerGradR" cx="50%" cy="30%" r="60%">
+              <stop offset="0%" stopColor="#e8845c"/>
+              <stop offset="100%" stopColor="#bf5828"/>
+            </radialGradient>
+            <linearGradient id="palmShadowL" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#b34e22" stopOpacity="0.5"/>
+              <stop offset="100%" stopColor="#b34e22" stopOpacity="0"/>
+            </linearGradient>
+            <linearGradient id="palmShadowR" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#b34e22" stopOpacity="0.5"/>
+              <stop offset="100%" stopColor="#b34e22" stopOpacity="0"/>
+            </linearGradient>
           </defs>
 
           <image href="/icon-512.png" x="0" y="0" width="512" height="512"/>
@@ -256,6 +291,70 @@ export function JanCharacter({ state, emailValue, onCardShake }: Props) {
             d="M220,370 Q250,350 270,348 Q290,350 320,370"
             fill="none" stroke="#2d1a0e" strokeWidth={4} strokeLinecap="round"
             style={{ opacity: 0, transition: 'opacity 0.25s ease' }}/>
+
+          {/* Hands — slide up from below to cover face in peeking state */}
+          <g className="jan-hands">
+
+            {/* ── LEFT HAND ── */}
+            {/* palm base */}
+            <rect x="132" y="300" width="122" height="260" rx="40" fill="url(#handGradL)"/>
+            {/* palm highlight */}
+            <ellipse cx="193" cy="338" rx="48" ry="28" fill="#e8845c" opacity="0.35"/>
+            {/* palm shadow overlay */}
+            <rect x="132" y="300" width="122" height="100" rx="40" fill="url(#palmShadowL)"/>
+
+            {/* finger bases merged into palm */}
+            <ellipse cx="193" cy="295" rx="65" ry="32" fill="url(#handGradL)"/>
+
+            {/* fingers: pinky → index */}
+            <rect x="134" y="215" width="28" height="95" rx="14" fill="url(#fingerGradL)"/>
+            <rect x="164" y="195" width="30" height="115" rx="15" fill="url(#fingerGradL)"/>
+            <rect x="196" y="188" width="30" height="122" rx="15" fill="url(#fingerGradL)"/>
+            <rect x="228" y="198" width="28" height="110" rx="14" fill="url(#fingerGradL)"/>
+            {/* thumb */}
+            <rect x="245" y="270" width="26" height="72" rx="13" fill="url(#fingerGradL)" transform="rotate(-38, 258, 310)"/>
+
+            {/* knuckle creases */}
+            <ellipse cx="148" cy="228" rx="9" ry="4" fill="#9e3e14" opacity="0.3"/>
+            <ellipse cx="179" cy="210" rx="10" ry="4" fill="#9e3e14" opacity="0.3"/>
+            <ellipse cx="211" cy="203" rx="10" ry="4" fill="#9e3e14" opacity="0.3"/>
+            <ellipse cx="242" cy="212" rx="9" ry="4" fill="#9e3e14" opacity="0.3"/>
+            {/* fingertip highlights */}
+            <ellipse cx="148" cy="220" rx="7" ry="5" fill="#f09878" opacity="0.5"/>
+            <ellipse cx="179" cy="200" rx="8" ry="5" fill="#f09878" opacity="0.5"/>
+            <ellipse cx="211" cy="193" rx="8" ry="5" fill="#f09878" opacity="0.5"/>
+            <ellipse cx="242" cy="203" rx="7" ry="5" fill="#f09878" opacity="0.5"/>
+
+            {/* ── RIGHT HAND ── */}
+            {/* palm base */}
+            <rect x="258" y="300" width="122" height="260" rx="40" fill="url(#handGradR)"/>
+            {/* palm highlight */}
+            <ellipse cx="319" cy="338" rx="48" ry="28" fill="#e8845c" opacity="0.35"/>
+            {/* palm shadow overlay */}
+            <rect x="258" y="300" width="122" height="100" rx="40" fill="url(#palmShadowR)"/>
+
+            {/* finger bases merged into palm */}
+            <ellipse cx="319" cy="295" rx="65" ry="32" fill="url(#handGradR)"/>
+
+            {/* fingers: index → pinky */}
+            <rect x="254" y="198" width="28" height="110" rx="14" fill="url(#fingerGradR)"/>
+            <rect x="286" y="188" width="30" height="122" rx="15" fill="url(#fingerGradR)"/>
+            <rect x="318" y="195" width="30" height="115" rx="15" fill="url(#fingerGradR)"/>
+            <rect x="350" y="215" width="28" height="95" rx="14" fill="url(#fingerGradR)"/>
+            {/* thumb */}
+            <rect x="241" y="270" width="26" height="72" rx="13" fill="url(#fingerGradR)" transform="rotate(38, 254, 310)"/>
+
+            {/* knuckle creases */}
+            <ellipse cx="268" cy="212" rx="9" ry="4" fill="#9e3e14" opacity="0.3"/>
+            <ellipse cx="301" cy="203" rx="10" ry="4" fill="#9e3e14" opacity="0.3"/>
+            <ellipse cx="333" cy="210" rx="10" ry="4" fill="#9e3e14" opacity="0.3"/>
+            <ellipse cx="364" cy="228" rx="9" ry="4" fill="#9e3e14" opacity="0.3"/>
+            {/* fingertip highlights */}
+            <ellipse cx="268" cy="203" rx="7" ry="5" fill="#f09878" opacity="0.5"/>
+            <ellipse cx="301" cy="193" rx="8" ry="5" fill="#f09878" opacity="0.5"/>
+            <ellipse cx="333" cy="200" rx="8" ry="5" fill="#f09878" opacity="0.5"/>
+            <ellipse cx="364" cy="220" rx="7" ry="5" fill="#f09878" opacity="0.5"/>
+          </g>
         </svg>
       </div>
 
