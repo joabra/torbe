@@ -19,7 +19,7 @@ En bokningssajt för Torbe-familjens lägenhet i Spanien (Mil Palmeras). Byggd m
 
 ## Kom igång lokalt
 
-Förutsättningar: Node.js 20+ och en PostgreSQL-databas.
+Förutsättningar: Node.js 20+ och en PostgreSQL-databas..
 
 ```bash
 git clone https://github.com/joabra/torbe.git
